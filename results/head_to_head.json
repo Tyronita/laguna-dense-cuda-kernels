@@ -1,0 +1,130 @@
+{
+  "ours": {
+    "label": "OURS (dense SFT)",
+    "model": "runs/sft/kernel_cuda_sft/checkpoint-final",
+    "params_b": 3.0,
+    "avg_tok_s": 32.1,
+    "fast_0": 0,
+    "load_s": 3,
+    "rows": [
+      {
+        "op": "ReLU",
+        "gen_tokens": 604,
+        "gen_sec": 19.04,
+        "tok_s": 31.7,
+        "compiled": false,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "Tanh",
+        "gen_tokens": 373,
+        "gen_sec": 12.16,
+        "tok_s": 30.7,
+        "compiled": true,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "Sigmoid",
+        "gen_tokens": 1024,
+        "gen_sec": 31.1,
+        "tok_s": 32.9,
+        "compiled": false,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "GeLU",
+        "gen_tokens": 473,
+        "gen_sec": 14.17,
+        "tok_s": 33.4,
+        "compiled": true,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "Abs",
+        "gen_tokens": 306,
+        "gen_sec": 9.61,
+        "tok_s": 31.8,
+        "compiled": false,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "SiLU",
+        "gen_tokens": 361,
+        "gen_sec": 11.18,
+        "tok_s": 32.3,
+        "compiled": false,
+        "correct": false,
+        "speedup": null
+      }
+    ]
+  },
+  "teacher": {
+    "label": "TEACHER Laguna-XS.2",
+    "model": "poolside/Laguna-XS.2",
+    "params_b": 33.4,
+    "avg_tok_s": 25.4,
+    "fast_0": 4,
+    "load_s": 35,
+    "rows": [
+      {
+        "op": "ReLU",
+        "gen_tokens": 354,
+        "gen_sec": 14.49,
+        "tok_s": 24.4,
+        "compiled": true,
+        "correct": true,
+        "speedup": 0.7047179008944089
+      },
+      {
+        "op": "Tanh",
+        "gen_tokens": 485,
+        "gen_sec": 18.74,
+        "tok_s": 25.9,
+        "compiled": true,
+        "correct": true,
+        "speedup": 0.6538431433938634
+      },
+      {
+        "op": "Sigmoid",
+        "gen_tokens": 357,
+        "gen_sec": 14.13,
+        "tok_s": 25.3,
+        "compiled": false,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "GeLU",
+        "gen_tokens": 361,
+        "gen_sec": 14.66,
+        "tok_s": 24.6,
+        "compiled": true,
+        "correct": false,
+        "speedup": null
+      },
+      {
+        "op": "Abs",
+        "gen_tokens": 683,
+        "gen_sec": 26.63,
+        "tok_s": 25.6,
+        "compiled": true,
+        "correct": true,
+        "speedup": 0.7115714530794305
+      },
+      {
+        "op": "SiLU",
+        "gen_tokens": 823,
+        "gen_sec": 31.19,
+        "tok_s": 26.4,
+        "compiled": true,
+        "correct": true,
+        "speedup": 0.8654096567529559
+      }
+    ]
+  }
+}

@@ -1,0 +1,622 @@
+{
+  "summary": {
+    "CUDA": {
+      "correct_passK": 2,
+      "n": 10,
+      "K": 3,
+      "avg_eval_s": 33.9,
+      "max_eval_s": 44.1,
+      "slow_count": 22
+    },
+    "Triton": {
+      "correct_passK": 0,
+      "n": 10,
+      "K": 3,
+      "avg_eval_s": 2.0,
+      "max_eval_s": 2.1,
+      "slow_count": 0
+    }
+  },
+  "traces": [
+    {
+      "dsl": "CUDA",
+      "op": "relu",
+      "k": 0,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 16.37534809112549,
+      "error": "a/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/relu_741346/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "relu",
+      "k": 1,
+      "compiled": true,
+      "correct": true,
+      "speedup": 0.9295134407093552,
+      "eval_s": 41.97810196876526,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "relu",
+      "k": 2,
+      "compiled": true,
+      "correct": true,
+      "speedup": 0.9302077484559236,
+      "eval_s": 42.532148599624634,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "tanh",
+      "k": 0,
+      "compiled": true,
+      "correct": true,
+      "speedup": 0.9201867496665185,
+      "eval_s": 43.3952157497406,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "tanh",
+      "k": 1,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 25.798408031463623,
+      "error": "st scalar_t *, int64_t) [with scalar_t=float]\" at line 33\n\n2 errors detected in the compilation of \"/home/ubuntu/.cache/torch_ext_shared/tanh_927756/cuda.cu\".\nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "tanh",
+      "k": 2,
+      "compiled": true,
+      "correct": true,
+      "speedup": 0.9206207932358013,
+      "eval_s": 43.13205885887146,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "sigmoid",
+      "k": 0,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.84252882003784,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "sigmoid",
+      "k": 1,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.69079351425171,
+      "error": "run:  stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "sigmoid",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.17694592475891,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "gelu",
+      "k": 0,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 44.135990619659424,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "gelu",
+      "k": 1,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 15.808133125305176,
+      "error": "a/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/gelu_234253/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "gelu",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.874035120010376,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "abs",
+      "k": 0,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 43.0173282623291,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "abs",
+      "k": 1,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 16.169445753097534,
+      "error": "da/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/abs_370372/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "abs",
+      "k": 2,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 15.75584864616394,
+      "error": "da/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/abs_399131/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "silu",
+      "k": 0,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 27.19927191734314,
+      "error": "st scalar_t *, int64_t) [with scalar_t=float]\" at line 39\n\n2 errors detected in the compilation of \"/home/ubuntu/.cache/torch_ext_shared/silu_428846/cuda.cu\".\nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "silu",
+      "k": 1,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.41111874580383,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "silu",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 43.91362643241882,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "softplus",
+      "k": 0,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 15.858518362045288,
+      "error": "clude -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/softplus_574276/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "softplus",
+      "k": 1,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 26.733562707901,
+      "error": "calar_t *, int64_t) [with scalar_t=float]\" at line 36\n\n4 errors detected in the compilation of \"/home/ubuntu/.cache/torch_ext_shared/softplus_605435/cuda.cu\".\nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "softplus",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 43.62002372741699,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "elu",
+      "k": 0,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 41.343348264694214,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "elu",
+      "k": 1,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.38575458526611,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "elu",
+      "k": 2,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 14.188923358917236,
+      "error": "da/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/elu_801429/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "leakyrelu",
+      "k": 0,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 15.673752069473267,
+      "error": "lude -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/leakyrelu_832254/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "leakyrelu",
+      "k": 1,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 43.045061349868774,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "leakyrelu",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 43.314775466918945,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "mish",
+      "k": 0,
+      "compiled": false,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 16.173004627227783,
+      "error": "a/include -isystem /usr/include/python3.10 -D_GLIBCXX_USE_CXX11_ABI=1 -fPIC -std=c++17 -c /home/ubuntu/.cache/torch_ext_shared/mish_966588/main.cpp -o main.o \nninja: build stopped: subcommand failed.\n"
+    },
+    {
+      "dsl": "CUDA",
+      "op": "mish",
+      "k": 1,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 42.108115673065186,
+      "error": null
+    },
+    {
+      "dsl": "CUDA",
+      "op": "mish",
+      "k": 2,
+      "compiled": true,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 41.52255940437317,
+      "error": null
+    },
+    {
+      "dsl": "Triton",
+      "op": "relu",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.6922075748443604,
+      "error": "exec: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 16)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "relu",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9783942699432373,
+      "error": "exec: invalid syntax (<string>, line 9)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "relu",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.0200791358947754,
+      "error": "exec: invalid syntax (<string>, line 9)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "tanh",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.0424649715423584,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "tanh",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9797031879425049,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "tanh",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.113100528717041,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "sigmoid",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.003119468688965,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "sigmoid",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9769482612609863,
+      "error": "exec: expected ':' (<string>, line 10)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "sigmoid",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9698550701141357,
+      "error": "exec: invalid syntax (<string>, line 4)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "gelu",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.974886178970337,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "gelu",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9688127040863037,
+      "error": "exec: invalid decimal literal (<string>, line 10)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "gelu",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9786510467529297,
+      "error": "exec: invalid decimal literal (<string>, line 10)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "abs",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9662246704101562,
+      "error": "exec: invalid syntax. Maybe you meant '==' or ':=' instead of '='? (<string>, line 15)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "abs",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.1156022548675537,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "abs",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9839792251586914,
+      "error": "exec: invalid syntax. Maybe you meant '==' or ':=' instead of '='? (<string>, line 15)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "silu",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9663896560668945,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "silu",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9693524837493896,
+      "error": "exec: invalid syntax. Maybe you meant '==' or ':=' instead of '='? (<string>, line 17)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "silu",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9615261554718018,
+      "error": "exec: invalid syntax. Maybe you meant '==' or ':=' instead of '='? (<string>, line 17)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "softplus",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9603383541107178,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "softplus",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9755675792694092,
+      "error": "exec: invalid syntax. Maybe you meant '==' or ':=' instead of '='? (<string>, line 20)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "softplus",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.0020644664764404,
+      "error": "exec: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 15)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "elu",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.981048345565796,
+      "error": "exec: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 21)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "elu",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.971682071685791,
+      "error": "exec: invalid syntax (<string>, line 21)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "elu",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9840350151062012,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "leakyrelu",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 2.004765748977661,
+      "error": "exec: could not get source code"
+    },
+    {
+      "dsl": "Triton",
+      "op": "leakyrelu",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9826416969299316,
+      "error": "exec: closing parenthesis ']' does not match opening parenthesis '(' (<string>, line 15)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "leakyrelu",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9894776344299316,
+      "error": "exec: unmatched ')' (<string>, line 18)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "mish",
+      "k": 0,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.628159523010254,
+      "error": "exec: invalid syntax (<string>, line 1)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "mish",
+      "k": 1,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9762160778045654,
+      "error": "exec: expected ':' (<string>, line 11)"
+    },
+    {
+      "dsl": "Triton",
+      "op": "mish",
+      "k": 2,
+      "compiled": null,
+      "correct": false,
+      "speedup": null,
+      "eval_s": 1.9780473709106445,
+      "error": "exec: could not get source code"
+    }
+  ]
+}
