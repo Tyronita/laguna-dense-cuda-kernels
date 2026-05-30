@@ -1,0 +1,32 @@
+{
+  "SFT": {
+    "compile": 5,
+    "correct": 1,
+    "n": 6,
+    "mean_best_speedup": 0.929
+  },
+  "SFT-ext": {
+    "compile": 0,
+    "correct": 0,
+    "n": 6,
+    "mean_best_speedup": null
+  },
+  "GRPO": {
+    "compile": 6,
+    "correct": 2,
+    "n": 6,
+    "mean_best_speedup": 0.887
+  },
+  "DPO": {
+    "compile": 6,
+    "correct": 3,
+    "n": 6,
+    "mean_best_speedup": 0.917
+  },
+  "Laguna-teacher": {
+    "compile": 0,
+    "correct": 0,
+    "n": 6,
+    "mean_best_speedup": null
+  }
+}
