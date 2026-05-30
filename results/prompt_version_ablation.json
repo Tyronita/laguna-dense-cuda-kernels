@@ -1,0 +1,17 @@
+{
+  "BARE": {
+    "compile": 5,
+    "correct": 2,
+    "n": 6
+  },
+  "VERSION": {
+    "compile": 6,
+    "correct": 2,
+    "n": 6
+  },
+  "MASTER": {
+    "compile": 2,
+    "correct": 0,
+    "n": 6
+  }
+}
