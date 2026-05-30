@@ -30,6 +30,17 @@ has a realistic target, and K should exceed top-8. This motivated **K=8 + DO-ACP
 - Gist: https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43
 - Report: `docs/reports/expert-activation-c4.md` · Script: `scripts/analyze_expert_activation.py`
 
+![expert activation](docs/figures/expert_activation.png)
+
+## Pretraining — reconstruction (kernel mixture, "V2")
+The dense `routed_dense` FFNs are trained, teacher-forced, to reconstruct each MoE block's output on a
+**kernel-heavy mixture** (KernelBook + OpenCodeInstruct + SakanaAI CUDA + Triton traces), all 39 layers
+in parallel: `loss = mean_ℓ(MSE/mean(yℓ²) + 0.05·(1−cos))`. Deep-layer MSE reaches **0.018** (2000 steps).
+This V2 checkpoint is the **direct ancestor** of the CUDA-SFT model.
+
+![v2 reconstruction](docs/figures/v2_training.png)
+![v2 per-layer heatmap](docs/figures/v2_layer_heatmap.png)
+
 ## Training overview — data & steps
 ![overview](docs/figures/training_overview.png)
 
