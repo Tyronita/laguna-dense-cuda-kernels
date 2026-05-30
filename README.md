@@ -20,6 +20,14 @@ Laguna-XS.2 MoE → densify (K=8 dense SwiGLU) → DO-ACP warm-start
    → [RFT/GRPO with verifiable reward — next]
 ```
 
+## Initial investigation — MoE expert activation (why densify)
+Before collapsing the MoE, we measured **how many of the 256 routed experts actually fire** on C4
+(161,932 tokens, all 39 sparse layers): **all 256 used, but only ~158 effective experts/layer**
+(load Gini ≈ 0.53). The routed FFN behaves far denser than its 256-way capacity → a dense surrogate
+has a realistic target, and K should exceed top-8. This motivated **K=8 + DO-ACP warm-start**.
+- Gist: https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43
+- Report: `docs/reports/expert-activation-c4.md` · Script: `scripts/analyze_expert_activation.py`
+
 ## Reproducible results (valid settings)
 **Inference settings:** `temperature=0.6, top_k=20, max_new_tokens=1024, do_sample=True, enable_thinking=False`.
 Pass@k because generation is stochastic (same prompt → different kernel each sample).
