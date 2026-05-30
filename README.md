@@ -7,6 +7,8 @@ densified from the **[poolside/Laguna-XS.2](https://huggingface.co/poolside/Lagu
 > project (MoE→dense densification). This repo collects **only the CUDA-kernel** work: SFT, the
 > kernel reward, the isolated eval harness, and reproducible results.
 
+**📊 All loss curves, pretraining graphs, distributions & diagrams: [docs/GRAPHS.md](docs/GRAPHS.md)** — motivated by the MoE expert-activation study (~158 of 256 effective experts/layer).
+
 ## Models (Hugging Face)
 | Model | Stage | Repo |
 |---|---|---|
