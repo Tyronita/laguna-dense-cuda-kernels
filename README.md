@@ -28,6 +28,21 @@ has a realistic target, and K should exceed top-8. This motivated **K=8 + DO-ACP
 - Gist: https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43
 - Report: `docs/reports/expert-activation-c4.md` · Script: `scripts/analyze_expert_activation.py`
 
+## Training overview — data, steps, DSLs
+![overview](docs/figures/training_overview.png)
+
+| Stage | Steps | Tokens | Data | Trainable |
+|---|---|---|---|---|
+| Warm-start (DO-ACP) | — | — | calibration | — |
+| Recon V1 (Python) | 2000 | ~8.2M | OpenCodeInstruct | routed_dense |
+| Recon V2 (kernel) | 2000 | ~8.2M | KernelBook40 / OpenCode30 / SakanaCUDA20 / traces10 | routed_dense |
+| SFT (CUDA) | 400 | ~3.5M | SakanaAI/AI-CUDA-Engineer-Archive (correct only) | routed_dense+lm_head+norms |
+
+**Reconstruction V2 mixture:** ≈ 50% kernel / 30% Python / 20% CUDA-C++.
+**DSLs:** CUDA (SFT-trained, stronger) + Triton (pretrain-only, emits valid `@triton.jit` but buggier).
+
+![sft curve](docs/figures/sft_curve.png)
+
 ## Reproducible results (valid settings)
 **Inference settings:** `temperature=0.6, top_k=20, max_new_tokens=1024, do_sample=True, enable_thinking=False`.
 Pass@k because generation is stochastic (same prompt → different kernel each sample).
