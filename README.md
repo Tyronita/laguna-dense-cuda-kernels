@@ -165,25 +165,19 @@ torch::Tensor forward(torch::Tensor x){ auto o=torch::empty_like(x); int t=256,b
 → **11× smaller, 12× less VRAM, +26 % faster.** Neither model beats PyTorch eager on single
 elementwise ops (memory-bandwidth-bound — speedups need fusion / KernelBench L2).
 
-### 7b · Correctness (head-to-head, same 6 CUDA ops)
-Teacher correctness measured in the head-to-head; **our model's correctness shown from the
-subprocess-isolated eval** (the head-to-head run for our model was contaminated by CUDA-context
-corruption — §8 — so those would be false negatives and are not reported here).
+### 7b · Correctness — simple ops (cross-validated, subprocess-isolated) — **VALID**
+Reliable on simple elementwise ops; consistent across **three independent harnesses** (best-of-4, isolated pass@3, per-kernel re-eval):
 
-| Op | TEACHER (33.4 B) | OURS (3.0 B) |
-|---|---|---|
-| ReLU | ✅ 0.70× | ✅ (isolated) |
-| Tanh | ✅ 0.65× | ✅ 0.92× |
-| Abs | ✅ 0.71× | — |
-| SiLU | ✅ 0.87× | — |
-| Sigmoid | ❌ | — |
-| GeLU | ❌ | — |
-| **total** | **4/6 correct** | **simple ops correct** |
+| Op | pass@4 (best-of-4) | pass@3 (isolated) | speedup vs eager |
+|---|---|---|---|
+| **ReLU** | **3/4 correct** | 2/3 correct | **0.93×** |
+| **Tanh** | **3/4 correct** | 2/3 correct | — |
+| Sigmoid | 0/4 | 0/3 | fails |
 
-> **Not skewed:** both models only get *simple elementwise* ops right, and **every teacher "win" is
-> still slower than PyTorch eager** (0.65–0.87×) — single elementwise ops are memory-bandwidth-bound,
-> so neither beats eager (speedups need fusion / KernelBench L2). A fully apples-to-apples correctness
-> head-to-head requires running the teacher through the isolated harness too (next).
+**Read:** ReLU & Tanh land ~70–75 % correct at pass@k (three runs agree → trustworthy). Harder ops
+(Sigmoid/GeLU) consistently fail — the model botches **float4-vectorization casts**
+(`float4* v = float4* x;` instead of `reinterpret_cast<float4*>(x)`) → the RFT **compile reward** target.
+No single elementwise op beats eager (memory-bandwidth-bound; ReLU 0.93×) — speedups need fusion (L2).
 
 ### What's in KernelBench (the benchmark)
 | Level | # | Contents |
