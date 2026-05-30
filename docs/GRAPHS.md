@@ -26,6 +26,10 @@ Per-depth reconstruction MSE; deep-layer MSE reaches **0.018** (the kernel mixtu
 than the Python flavour). Loss = `mean_ℓ(MSE/mean(yℓ²) + 0.05·(1−cos))`, teacher-forced, all 39 layers.
 ![v2 reconstruction](figures/v2_training.png)
 
+**V2 per-layer MSE heatmap** — deep layers (bottom, ~L30) start hot and cool over training:
+![v2 heatmap](figures/v2_layer_heatmap.png)
+
+
 **Kernel-mixture smoke (8 layers)** — loss 0.049→0.033, cosine 0.95→0.58:
 ![kernel smoke](figures/kernelmix_smoke_curves.png)
 
