@@ -28,7 +28,7 @@ has a realistic target, and K should exceed top-8. This motivated **K=8 + DO-ACP
 - Gist: https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43
 - Report: `docs/reports/expert-activation-c4.md` · Script: `scripts/analyze_expert_activation.py`
 
-## Training overview — data, steps, DSLs
+## Training overview — data & steps
 ![overview](docs/figures/training_overview.png)
 
 | Stage | Steps | Tokens | Data | Trainable |
@@ -39,7 +39,7 @@ has a realistic target, and K should exceed top-8. This motivated **K=8 + DO-ACP
 | SFT (CUDA) | 400 | ~3.5M | SakanaAI/AI-CUDA-Engineer-Archive (correct only) | routed_dense+lm_head+norms |
 
 **Reconstruction V2 mixture:** ≈ 50% kernel / 30% Python / 20% CUDA-C++.
-**DSLs:** CUDA (SFT-trained, stronger) + Triton (pretrain-only, emits valid `@triton.jit` but buggier).
+**DSLs:** CUDA (SFT-trained) and Triton (pretrain-only) — per-DSL pass@k results pending the isolated eval (not yet measured).
 
 ![sft curve](docs/figures/sft_curve.png)
 
