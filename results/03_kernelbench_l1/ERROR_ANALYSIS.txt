@@ -1,0 +1,203 @@
+==========================================================================================
+ERROR ANALYSIS — All Models
+==========================================================================================
+
+Error Category            GRPO-offline  GRPO-online          DPO       SFT-v1       SFT-v2
+------------------------------------------------------------------------------------------
+correct                              9           10            2            0            0
+compiled_but_incorrect              10           13           25           27           21
+no_code_extracted                   14            4            6            8            6
+init_missing_args                   40           43           51           24           24
+cuda_build_error                    19           15            1           25           33
+cuda_illegal_memory                  2            5            2            0            1
+python_syntax_error                  3            4            3            5            4
+eval_returned_none                   2            6            0            0            0
+other                                1            0           10           11           11
+
+==========================================================================================
+CUDA BUILD ERRORS — Detailed
+==========================================================================================
+
+--- GRPO-offline (19 build errors) ---
+  [19] P31,43,45,47,48,54,55,59,60,63
+       Error building extension 'custom_ops': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=custom_ops
+
+--- GRPO-online (15 build errors) ---
+  [15] P25,26,28,34,35,36,45,47,48,63
+       Error building extension 'custom_ops': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=custom_ops
+
+--- DPO (1 build errors) ---
+  [1] P7
+       Error building extension 'custom_ops': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=custom_ops
+
+--- SFT-v1 (25 build errors) ---
+  [25] P7,16,23,27,30,36,42,43,45,46
+       Ninja is required to load C++ extensions (pip install ninja to get it)
+
+--- SFT-v2 (33 build errors) ---
+  [33] P7,12,14,18,28,32,34,35,36,40
+       Ninja is required to load C++ extensions (pip install ninja to get it)
+
+==========================================================================================
+CUDA ILLEGAL MEMORY ACCESS — Detailed
+==========================================================================================
+
+--- GRPO-offline (2 illegal memory errors) ---
+  P3:
+    __global__ void bmm_unroll_kernel(const float* A, const float* B, float* C, int batch_size, int M, int K, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  P38:
+    __global__ void l1_norm_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+--- GRPO-online (5 illegal memory errors) ---
+  P3:
+    __global__ void bmm_unroll_kernel(const float* A, const float* B, float* C, int batch_size, int M, int K, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  P23:
+    __global__ void softmax_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    shared_mem[threadIdx.x] = max_val;
+    shared_mem[threadIdx.x] = sum;
+  P38:
+    __global__ void l1_norm_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  P39:
+    __global__ void l2norm_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  P100:
+    __global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+--- DPO (2 illegal memory errors) ---
+  P23:
+    __global__ void softmax_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    shared_mem[threadIdx.x] = input[idx * dim + feature_idx];
+    float max_val = shared_mem[threadIdx.x];
+    for (int i = threadIdx.x; i < dim; i += blockDim.x) {
+  P38:
+    __global__ void l1_norm_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+--- SFT-v2 (1 illegal memory errors) ---
+  P100:
+    __global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+==========================================================================================
+COMPILED BUT INCORRECT — Per Problem
+==========================================================================================
+
+--- GRPO-offline (10 compiled but incorrect) ---
+  P 10  correctness check failed
+  P 14  correctness check failed
+  P 20  correctness check failed
+  P 23  correctness check failed
+  P 24  correctness check failed
+  P 25  correctness check failed
+  P 28  correctness check failed
+  P 32  correctness check failed
+  P 94  correctness check failed
+  P 98  correctness check failed
+
+--- GRPO-online (13 compiled but incorrect) ---
+  P  2  correctness check failed
+  P  4  correctness check failed
+  P  7  correctness check failed
+  P 13  correctness check failed
+  P 14  correctness check failed
+  P 15  correctness check failed
+  P 16  correctness check failed
+  P 18  correctness check failed
+  P 20  correctness check failed
+  P 24  correctness check failed
+  P 32  correctness check failed
+  P 97  correctness check failed
+  P 98  correctness check failed
+
+--- DPO (25 compiled but incorrect) ---
+  P  1  correctness check failed
+  P  2  correctness check failed
+  P  3  correctness check failed
+  P  4  correctness check failed
+  P  5  correctness check failed
+  P  6  correctness check failed
+  P  8  correctness check failed
+  P  9  correctness check failed
+  P 12  correctness check failed
+  P 13  correctness check failed
+  P 14  correctness check failed
+  P 15  correctness check failed
+  P 16  correctness check failed
+  P 20  correctness check failed
+  P 21  correctness check failed
+  P 24  correctness check failed
+  P 25  correctness check failed
+  P 26  correctness check failed
+  P 32  correctness check failed
+  P 39  correctness check failed
+  P 94  correctness check failed
+  P 96  correctness check failed
+  P 97  correctness check failed
+  P 98  correctness check failed
+  P100  correctness check failed
+
+--- SFT-v1 (27 compiled but incorrect) ---
+  P  1  correctness check failed
+  P  2  correctness check failed
+  P  3  correctness check failed
+  P  4  correctness check failed
+  P  5  correctness check failed
+  P  6  correctness check failed
+  P  8  correctness check failed
+  P  9  correctness check failed
+  P 10  correctness check failed
+  P 13  correctness check failed
+  P 14  correctness check failed
+  P 15  correctness check failed
+  P 17  correctness check failed
+  P 18  correctness check failed
+  P 20  correctness check failed
+  P 24  correctness check failed
+  P 25  correctness check failed
+  P 28  correctness check failed
+  P 29  correctness check failed
+  P 32  correctness check failed
+  P 37  correctness check failed
+  P 38  correctness check failed
+  P 39  correctness check failed
+  P 88  correctness check failed
+  P 96  correctness check failed
+  P 97  correctness check failed
+  P 98  correctness check failed
+
+--- SFT-v2 (21 compiled but incorrect) ---
+  P  1  correctness check failed
+  P  2  correctness check failed
+  P  3  correctness check failed
+  P  4  correctness check failed
+  P  5  correctness check failed
+  P  6  correctness check failed
+  P  8  correctness check failed
+  P  9  correctness check failed
+  P 10  correctness check failed
+  P 15  correctness check failed
+  P 16  correctness check failed
+  P 17  correctness check failed
+  P 19  correctness check failed
+  P 20  correctness check failed
+  P 21  correctness check failed
+  P 24  correctness check failed
+  P 25  correctness check failed
+  P 29  correctness check failed
+  P 38  correctness check failed
+  P 96  correctness check failed
+  P 98  correctness check failed
+
+==========================================================================================
+__init__ MISSING ARGS — Which Problems
+==========================================================================================
+Problems affected: [31, 33, 34, 35, 36, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 89, 90, 91, 92, 93, 99]
+Total unique: 58
+These are all ops requiring constructor args (conv weights, norm params, etc)
