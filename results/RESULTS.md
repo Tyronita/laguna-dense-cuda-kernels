@@ -22,9 +22,9 @@ Three arms, all from SFT-extended, using different RL methods:
 
 | Arm | HF name | Script | Method | Data | Online? |
 |---|---|---|---|---|---|
-| **GRPO-offline** | `cuda-grpo` | `rft_offline_sakana.py` | Dr.GRPO + DAPO | SakanaAI traces grouped by Task_ID (~120 tasks) | **No** — uses pre-recorded `Correct` + `CUDA_Speedup_Native` |
-| **GRPO-online** | `cuda-rft` | `grpo_kernel.py` | Dr.GRPO + DAPO | Model's own generations on elementwise ops | **Yes** — live compilation + verification in subprocess |
-| **DPO** | `cuda-dpo` | `dpo_sakana.py` | DPO (Rafailov et al.) | SakanaAI preference pairs (correct+fast ≻ incorrect/slow) | **No** — preferences from dataset |
+| **GRPO-offline** | `cuda-grpo` | `003_rft_offline.py` | Dr.GRPO + DAPO | SakanaAI traces grouped by Task_ID (~120 tasks) | **No** — uses pre-recorded `Correct` + `CUDA_Speedup_Native` |
+| **GRPO-online** | `cuda-rft` | `0003_grpo.py` | Dr.GRPO + DAPO | Model's own generations on elementwise ops | **Yes** — live compilation + verification in subprocess |
+| **DPO** | `cuda-dpo` | `0004_dpo.py` | DPO (Rafailov et al.) | SakanaAI preference pairs (correct+fast ≻ incorrect/slow) | **No** — preferences from dataset |
 
 ### GRPO-offline (`cuda-grpo`)
 - Groups ~6 candidate kernels per Task_ID from SakanaAI archive
