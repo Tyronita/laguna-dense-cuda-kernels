@@ -1,0 +1,27 @@
+# Laguna Dense — end-to-end training requirements
+# Python >= 3.11.  trust_remote_code=True is required to load laguna / laguna_dense.
+
+# --- core: densification, reconstruction, SFT, GRPO, DPO ---
+torch>=2.3
+transformers>=4.44
+accelerate>=0.34
+datasets>=2.20
+safetensors>=0.4
+huggingface_hub>=0.24
+einops>=0.8
+numpy>=1.26
+pyyaml>=6.0
+tqdm>=4.66
+sentencepiece
+
+# --- CUDA-kernel compile + verify (GRPO reward, KernelBench eval) ---
+ninja              # required by torch.utils.cpp_extension.load_inline (compiles generated kernels)
+triton>=2.3        # Triton-kernel eval path in src/densify/kernel_reward.py
+
+# Notes
+# - A working CUDA toolkit (nvcc) must be on PATH for the GRPO reward / kernel eval;
+#   kernel_reward.py sets CUDA_HOME=/usr/local/cuda and prepends /usr/local/cuda/bin.
+# - Stage 1 reconstruction needs the 33B teacher (poolside/Laguna-XS.2) resident in
+#   bf16 alongside the student: ~66 GB teacher + ~6 GB student + activations.
+#   Use --optimizer adafactor to fit all 39 layers on a single 80 GB GPU.
+# - No trl: the SFT/GRPO/DPO loops are self-contained (plain torch + transformers).
