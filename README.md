@@ -36,12 +36,31 @@ poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
    ▼ Stage 3  GRPO/RLVR (verifiable reward)                      → [next]
 ```
 
-## Models (Hugging Face)
-| Model | Stage | Repo |
-|---|---|---|
-| Dense reconstruction (kernel mix) | pretrain (V2) | `EvanOLeary/laguna-xs2-dense-k8-kernelmix` |
-| **CUDA-SFT** | SFT | `EvanOLeary/laguna-xs2-dense-k8-cuda-sft` |
-| (sibling) Dense reconstruction (Python) | pretrain (V1) | `EvanOLeary/laguna-xs2-dense-k8-recon` |
+## Model card — variants & download
+All on the Hub under **[`EvanOLeary`](https://huggingface.co/EvanOLeary)** · load with `trust_remote_code=True`.
+
+| Variant | Stage | Size | Repo |
+|---|---|---|---|
+| **CUDA-SFT** (bf16) | SFT | 5.99 GB | [`…-cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft) |
+| CUDA-SFT · **int8** (torchao) | SFT · quant | **3.21 GB (−46 %)** | [`…-cuda-sft-int8`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8) |
+| CUDA-SFT · **4-bit HQQ** | SFT · quant | **~1.7 GB (−72 %)** | [`…-cuda-sft-int4-hqq`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int4-hqq) |
+| CUDA-**GRPO** | online GRPO | 5.99 GB | [`…-cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo) |
+| CUDA-**DPO** | DPO | 5.99 GB | [`…-cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo) |
+| Recon · kernel-mix (V2) | pretrain | 5.99 GB | [`…-k8-kernelmix`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-kernelmix) |
+| Recon · Python (V1) | pretrain | 5.99 GB | [`…-k8-recon`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-recon) |
+
+### Quantization (verified — A100, torch 2.12 / transformers 5.9)
+| Recipe | Size | Quality | Speed | How |
+|---|---|---|---|---|
+| **torchao Int8 weight-only** *(recommended)* | 5.99 → **3.21 GB** | **byte-identical** on greedy | −34 % tok/s (`torch.compile` recovers most) | `quantize_(model, Int8WeightOnlyConfig())` (~0.4 s, save `.bin`) |
+| **HQQ 4-bit** (`nbits=4, group=64, axis=1`) | 5.99 → **~1.7 GB** | minor drift; valid CUDA | ~5.8 tok/s | `AutoHQQHFModel.quantize_model(...)` — no calibration |
+| ❌ bitsandbytes 0.49 · ❌ torchao Int4 (needs `mslk`) · ❌ NVFP4 (Blackwell) · ❌ FP8 (Hopper) | — | — | — | unsupported on Ampere/this stack |
+
+### Inference optimization
+- **`torch.compile(mode="max-autotune")`** after `quantize_` recovers most of the int8 throughput.
+- **Sampling for kernels:** `temperature 0.6 · top_k 20 · do_sample=True` → use **pass@k**; `max_new_tokens ≥ 1024` (under-capping truncates kernels); `enable_thinking=False`; system prompt must match the target DSL.
+- **Serving:** vLLM (`trust_remote_code`); **ExecuTorch** export for on-device (fits mobile at 4-bit). NVFP4 + Blackwell is the future low-precision path.
+- **Eval isolation:** always compile+run generated kernels in a **subprocess** (`scripts/eval_worker.py`) — a faulty kernel corrupts the CUDA context otherwise.
 
 ---
 
@@ -98,6 +117,16 @@ Hidden 2048 · 40 layers · 262 k ctx · 100 352 vocab · SiLU/SwiGLU.
 | Fields | `PyTorch_Code_Module` (prompt) → `CUDA_Code` (target), filtered `Correct==True` |
 | Format | chat: `system + user(PyTorch ```python```) → assistant(```cpp CUDA```)`, prompt masked |
 | Not used | `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy` → reserved for the GRPO reward |
+
+### Datasets — links & contents
+| Dataset | Link | Contents |
+|---|---|---|
+| **GPUMODE/KernelBook** | [🤗](https://huggingface.co/datasets/GPUMODE/KernelBook) | PyTorch→**Triton** kernel pairs (`python_code` → `triton_code`) scraped + compiled; the kernel-generation backbone of the mix |
+| **nvidia/OpenCodeInstruct** | [🤗](https://huggingface.co/datasets/nvidia/OpenCodeInstruct) | ~5 M general **Python** instruction→code pairs; anti-monoculture / keeps general coding ability |
+| **SakanaAI/AI-CUDA-Engineer-Archive** | [🤗](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) | **PyTorch→CUDA-C++** kernels discovered by Sakana's agent; `level_1/2/3` splits, per-row `Correct`, `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy`; ~30,615 `Correct==True` rows used for SFT/GRPO/DPO (CC-BY-4.0) |
+| **kernelbook-triton multiturn traces** | [🤗](https://huggingface.co/datasets/ppbhatt500/kernelbook-triton-multiturn-reasoning-traces) | multi-turn **Triton reasoning** traces (think→kernel); adds reasoning-shaped kernel data |
+
+**Eval substrate:** [KernelBench](https://github.com/ScalingIntelligence/KernelBench) (L1 single ops · L2 fusion · L3 nets · L4 HF-model) + the isolated `robust-kbench`-style reward.
 
 ---
 
