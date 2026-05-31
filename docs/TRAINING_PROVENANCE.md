@@ -161,3 +161,37 @@ seeded streaming interleave):
 2. **Field handler** (`reconstruction_data.format_sft_row`) must recognize the `query`/`kernel`/`code` schemas (KernelBook/CUDA) or those rows are skipped → mix silently degrades to OpenCode-only.
 3. **`Correct==True` filter** on Sakana for SFT/DPO (hold out `CUDA_Speedup_Native`/`NCU_Profile`/`Clang_Tidy` for the RFT reward, not for SFT).
 4. **De-dup & decontaminate** against KernelBench tasks before RFT to avoid reward-hacking on seen solutions.
+
+---
+
+## 9. Is this trainable scope typical for SFT?
+
+**No — it's a deliberate *partial* fine-tune, not standard SFT.** Three regimes for comparison:
+
+| Regime | What trains | Typical % | Used where |
+|---|---|---|---|
+| **Full SFT** | *all* parameters | 100% | the default for instruction-tuning (e.g. most code models) |
+| **PEFT / LoRA** | a small low-rank add-on, base frozen | <1% | cheap adaptation |
+| **Ours** | `routed_dense` (+`lm_head`,+norms); attention/embed/shared **frozen** | **~33–40%** | dictated by the densification constraint |
+
+**Why ours is unusual *and* intentional:** in densification the **attention, embeddings, and shared
+expert were copied verbatim from the teacher and are already "correct."** Freezing them (a) preserves
+the teacher's behavior and avoids catastrophic forgetting, (b) keeps teacher+student+optimizer inside
+80 GB, and (c) focuses the gradient on the *only* part we changed — the reconstructed FFN. So it's a
+**selective full-rank fine-tune of the modified subnetwork**: heavier than LoRA, lighter than full SFT.
+Standard SFT would unfreeze everything; we deliberately do not.
+
+## 10. What is "warmup" (and how is it different from "warm-start")?
+
+**Learning-rate warmup** = for the first **N steps**, ramp the learning rate **from ~0 up to the target**
+(usually linearly), then hold or decay it.
+- **Why:** at the start, weights are fresh and an adaptive optimizer's moment estimates (Adam's `m`/`v`)
+  are unreliable; jumping straight to full LR can cause a **loss spike / divergence** (large early
+  `grad_norm`). Warmup lets the optimizer statistics settle and the model ease in.
+- **Typical values:** `warmup_ratio` ≈ 1–5% of total steps, or a fixed `warmup_steps` (≈ 8–100).
+- **In *our* recipe:** the 3B scripts use **constant LR, no warmup** (Adafactor `lr 2e-4`; AdamW constant).
+  The separate 5B branch *did* use `warmup_steps 8` — after a too-short 2-step warmup spiked `grad_norm`
+  to 4.56.
+- **Not the same as "warm-start":** **warmup** ramps the **learning rate over steps**; **DO-ACP
+  warm-start** sets the **initial weights** (0 steps). Both contain "warm," but one is an optimizer
+  schedule and the other is an initialization.
