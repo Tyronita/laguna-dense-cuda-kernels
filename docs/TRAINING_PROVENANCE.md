@@ -29,12 +29,12 @@ and which paper each step comes from*.
 
 | Stage | Script | Trainable modules | Trainable params | % of 3.0B |
 |---|---|---|---|---|
-| **0 · Build + warm-start** | `00_build_dense_placeholder.py` | — (init only, 0 steps) | 0 | 0% |
-| **1 · Reconstruction (distillation)** | `01_train_dense_reconstruction.py` | `routed_dense` | **981.5 M** | **32.8%** |
-| **2 · SFT-A (general)** | `02_sft_general.py` (`--train-norms --train-lm-head`) | `routed_dense + RMSNorms + lm_head` | **1187.2 M** | 39.6% |
-| **2 · SFT-B (CUDA)** | `02_sft_cuda.py` | `routed_dense + lm_head + RMSNorms` | **1187.2 M** | 39.6% |
-| **3 · GRPO** | `03_grpo.py` | `routed_dense + lm_head` | **1187.0 M** | 39.6% |
-| **4 · DPO** | `04_dpo.py` | `routed_dense + lm_head` | **1187.0 M** | 39.6% |
+| **0 · Build + warm-start** | `000_build_dense_placeholder.py` | — (init only, 0 steps) | 0 | 0% |
+| **1 · Reconstruction (distillation)** | `001_train_dense_reconstruction.py` | `routed_dense` | **981.5 M** | **32.8%** |
+| **2 · SFT-A (general)** | `002_sft_general.py` (`--train-norms --train-lm-head`) | `routed_dense + RMSNorms + lm_head` | **1187.2 M** | 39.6% |
+| **2 · SFT-B (CUDA)** | `002_sft_cuda.py` | `routed_dense + lm_head + RMSNorms` | **1187.2 M** | 39.6% |
+| **3 · GRPO** | `003_grpo.py` | `routed_dense + lm_head` | **1187.0 M** | 39.6% |
+| **4 · DPO** | `004_dpo.py` | `routed_dense + lm_head` | **1187.0 M** | 39.6% |
 
 **Key fact:** every stage trains **only the FFN (`routed_dense`)** plus, after reconstruction,
 the `lm_head` (and norms). Attention, embeddings, and the shared expert are **always frozen** —
@@ -148,7 +148,7 @@ remains a future lever (it's the one RADLADS calls "step 2" and that Hinton-KD d
 Reconstruction depends **only on what text drives the frozen teacher's forward pass**, so the data
 mix is a direct quality lever (it sets which experts activate → which must be reconstructed).
 
-**Reconstruction mixes** (`01_train_dense_reconstruction.py --datasets "name:weight[:split]"`,
+**Reconstruction mixes** (`001_train_dense_reconstruction.py --datasets "name:weight[:split]"`,
 seeded streaming interleave):
 - **V1** — `nvidia/OpenCodeInstruct` only → loss 0.691→0.332.
 - **V2** — `GPUMODE/KernelBook:0.40, nvidia/OpenCodeInstruct:0.30, SakanaAI/AI-CUDA-Engineer-Archive:0.20:level_1, …triton-traces:0.10` → loss 0.672→**0.163** (~2× lower).

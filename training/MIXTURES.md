@@ -7,7 +7,7 @@ must be reconstructed).
 
 ## Stage 1 — Reconstruction mixtures
 
-The trainer (`scripts/01_train_dense_reconstruction.py`) interleaves streaming datasets by
+The trainer (`scripts/0001_train_dense_reconstruction.py`) interleaves streaming datasets by
 weight with a **seeded RNG** (`random.Random(0)`, deterministic) via `--datasets
 "name:weight[:split]"`. Two mixtures were run:
 
@@ -40,7 +40,7 @@ subset, so the kernel-anchored mix reconstructs better than OpenCode-only.
 ## Stage 3 — the two SFT mixes
 
 ### SFT Mix A — general-code recovery
-`scripts/02_sft_general.py` on **`nvidia/OpenCodeInstruct`** (rendered to a JSONL of chat
+`scripts/0002_sft_general.py` on **`nvidia/OpenCodeInstruct`** (rendered to a JSONL of chat
 rows first). Recovers chat behaviour + broad code generation after reconstruction. Optional
 logit-KD against the teacher via `--kd-dataset/--kd-weight/--kd-temperature`.
 - Defaults: seq 8192, lr 5e-5, max-steps 500; trainable adds `--train-norms --train-lm-head`.
@@ -48,13 +48,13 @@ logit-KD against the teacher via `--kd-dataset/--kd-weight/--kd-temperature`.
   motivates RFT/GRPO.
 
 ### SFT Mix B — CUDA kernels
-`scripts/02_sft_cuda.py` on **`SakanaAI/AI-CUDA-Engineer-Archive`**, splits `level_1,level_2`,
+`scripts/0002_sft_cuda.py` on **`SakanaAI/AI-CUDA-Engineer-Archive`**, splits `level_1,level_2`,
 **`Correct==True` only**, field map `PyTorch_Code_Module → CUDA_Code`, chat-formatted.
 - Defaults: seq 2048, lr 1e-5, grad-accum 8, max-steps 400; trainable = `routed_dense +
   lm_head + norms` (attention frozen).
 - Held out for the RFT reward: `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy`.
 
 ## Stage 5 — DPO preference pairs
-`scripts/04_dpo.py` mines the Sakana archive's evolutionary trajectory: per `Task_ID`,
+`scripts/0004_dpo.py` mines the Sakana archive's evolutionary trajectory: per `Task_ID`,
 **prefer the correct + fastest kernel (by `CUDA_Speedup_Native`) over an incorrect/slower one**.
 Defaults: splits `level_1,level_2`, max-tasks 200, pairs-per-task 8, β 0.1, lr 5e-7, 300 steps.

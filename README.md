@@ -1,5 +1,11 @@
 # Laguna-Dense — CUDA Kernel Generation
 
+> **Group research — shared learnings.** This repo and its docs capture our group's
+> work densifying the Laguna-XS.2 MoE into a dense CUDA-kernel model. See
+> [`docs/TRAINING_PROVENANCE.md`](docs/TRAINING_PROVENANCE.md) and
+> [`docs/INVESTIGATION_GENERAL_METHOD.md`](docs/INVESTIGATION_GENERAL_METHOD.md).
+
+
 A **~3.0 B fully-dense** model that generates **CUDA / Triton GPU kernels** from PyTorch modules,
 **densified from the 33 B [poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) MoE**.
 
@@ -210,9 +216,9 @@ order-dependent, contaminated results. **Compile + run each kernel in its own su
 ## 10 · Repo contents
 | Path | What |
 |---|---|
-| `scripts/02_sft_cuda.py` | CUDA SFT (PyTorch→CUDA, correct kernels, chat-formatted) |
+| `scripts/0002_sft_cuda.py` | CUDA SFT (PyTorch→CUDA, correct kernels, chat-formatted) |
 | `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + Triton eval, timeout-guarded |
-| `scripts/03_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO dynamic sampling + KL anchor) |
+| `scripts/0003_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO dynamic sampling + KL anchor) |
 | `scripts/eval_worker.py` + `eval_10ops_isolated.py` | **isolated** KernelBench-Lite eval |
 | `scripts/head_to_head.py` | ours vs teacher (tok/s + correctness) |
 | `scripts/ablate_api_hint.py` / `ablate_triton.py` | prompt ablations (CUDA / Triton) |
