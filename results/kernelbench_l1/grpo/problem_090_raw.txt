@@ -1,0 +1,30 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void optimized_cumprod_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float sum = 0.0f;
+        for (int i = 0; i < dim; i++) {
+            sum += input[idx * dim + i] * input[idx * dim + i];
+        }
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor optimized_cumprod_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto output = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    optimized_cumprod_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), output.data_ptr<float>(), size, dim);
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &optimized_cumprod_cuda, "Optimized cumulative product with CUDA");
+}
+```
+</assistant>

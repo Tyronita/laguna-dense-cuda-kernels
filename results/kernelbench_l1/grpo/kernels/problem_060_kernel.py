@@ -1,0 +1,187 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D convolution with optimized thread and block indexing
+__global__ void conv3d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int in_width,
+    int in_height,
+    int in_depth,
+    int out_channels,
+    int k_w,
+    int k_h,
+    int k_d,
+    int stride,
+    int padding,
+    int out_width,
+    int out_height,
+    int out_depth) {
+
+    // Calculate output dimensions
+    int out_w = (in_width - 1) * stride - 2 * padding + k_w;
+    int out_h = (in_height - 1) * stride - 2 * padding + k_h;
+    int out_d = (in_depth - 1) * stride - 2 * padding + k_d;
+
+    // Calculate total output elements
+    int total = batch_size * out_channels * out_w * out_h * out_d;
+
+    // Each thread processes multiple elements using stride loop
+    for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < total; idx += blockDim.x * gridDim.x) {
+        // Decode output indices
+        int b = idx / (out_channels * out_w * out_h * out_d);
+        int c = (idx / (out_w * out_h * out_d)) % out_channels;
+        int w = (idx / (out_h * out_d)) % out_w;
+        int h = (idx / out_d) % out_h;
+        int d = idx % out_d;
+
+        float sum = 0.0f;
+
+        // Convolution loop with stride to cover all input channels
+        for (int c_in = 0; c_in < in_channels; c_in++) {
+            for (int k_d = 0; k_d < k_d; k_d++) {
+                int in_d_offset = d - padding + k_d - stride;
+                if (in_d_offset >= 0 && in_d_offset < in_depth) {
+                    int in_d_index = c_in * (in_width * in_height * in_depth) + 
+                                     in_w * (in_height * in_depth) + 
+                                     in_h * in_depth + 
+                                     in_d_offset;
+                    float in_val = input[in_d_index];
+                    int weight_d_index = c_in * (out_channels * k_w * k_h * k_d) + 
+                                     c * (k_w * k_h * k_d) + 
+                                     k_w * (k_h * k_d) + 
+                                     k_h * k_d + 
+                                     k_d;
+                    sum += in_val * weight[weight_d_index];
+                }
+            }
+            for (int k_h = 0; k_h < k_h; k_h++) {
+                int in_h_offset = h - padding + k_h - stride;
+                if (in_h_offset >= 0 && in_h_offset < in_height) {
+                    int in_h_index = c_in * (in_width * in_height * in_depth) + 
+                                     in_w * (in_height * in_depth) + 
+                                     in_h_offset * in_depth + 
+                                     k_d;
+                    float in_val = input[in_h_index];
+                    int weight_h_index = c_in * (out_channels * k_w * k_h * k_d) + 
+                                     c * (k_w * k_h * k_d) + 
+                                     k_w * (k_h * k_d) + 
+                                     k_h * k_d + 
+                                     k_d;
+                    sum += in_val * weight[weight_h_index];
+                }
+            }
+            for (int k_w = 0; k_w < k_w; k_w++) {
+                int in_w_offset = w - padding + k_w - stride;
+                if (in_w_offset >= 0 && in_w_offset < in_width) {
+                    int in_w_index = c_in * (in_width * in_height * in_depth) + 
+                                     in_h * in_depth + 
+                                     in_w_offset * in_depth + 
+                                     k_d;
+                    float in_val = input[in_w_index];
+                    int weight_w_index = c_in * (out_channels * k_w * k_h * k_d) + 
+                                     c * (k_w * k_h * k_d) + 
+                                     k_w * (k_h * k_d) + 
+                                     k_h * k_d + 
+                                     k_d;
+                    sum += in_val * weight[weight_w_index];
+                }
+            }
+        }
+
+        // Add bias
+        sum += bias[c];
+        output[idx] = sum;
+    }
+}
+
+// C++ interface exposed to PyTorch
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding) {
+
+    // Input dimensions
+    int batch_size = x.size(0);
+    int in_channels = x.size(1);
+    int in_width = x.size(2);
+    int in_height = x.size(3);
+    int in_depth = x.size(4);
+
+    // Weight dimensions
+    int out_channels = weight.size(0);
+    int k_w = weight.size(2);
+    int k_h = weight.size(3);
+    int k_d = weight.size(4);
+
+    // Calculate output dimensions
+    int out_width = (in_width - 1) * stride - 2 * padding + k_w;
+    int out_height = (in_height - 1) * stride - 2 * padding + k_h;
+    int out_depth = (in_depth - 1) * stride - 2 * padding + k_d;
+
+    // Allocate output tensor
+    auto output = torch::empty({batch_size, out_channels, out_width, out_height, out_depth}, x.options());
+
+    // Calculate grid and block sizes
+    int total = batch_size * out_channels * out_width * out_height * out_depth;
+    int threads = 256;
+    int blocks = (total + threads - 1) / threads;
+
+    // Launch kernel
+    conv3d_kernel<<<blocks, threads>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        in_width,
+        in_height,
+        in_depth,
+        out_channels,
+        k_w,
+        k_h,
+        k_d,
+        stride,
+        padding,
+        out_width,
+        out_height,
+        out_depth
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

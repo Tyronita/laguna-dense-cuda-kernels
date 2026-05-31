@@ -1,0 +1,103 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Define tile size for shared memory tiling
+#define TILE_SIZE 32
+
+// CUDA kernel for computing C = A * B using shared memory tiling
+__global__ void matmul_shared_kernel(const float* A, const float* B, float* C, int N) {
+    // Compute the row and column indices for the output matrix C
+    int row = blockIdx.y * TILE_SIZE + threadIdx.y;
+    int col = blockIdx.x * TILE_SIZE + threadIdx.x;
+
+    float sum = 0.0f;
+
+    // Allocate shared memory for tiles of A and B
+    __shared__ float As[TILE_SIZE][TILE_SIZE];
+    __shared__ float Bs[TILE_SIZE][TILE_SIZE];
+
+    // Loop over tiles in the k-dimension
+    for (int t = 0; t < (N + TILE_SIZE - 1) / TILE_SIZE; t++) {
+        // Load a tile of A from global memory into shared memory
+        int a_col = t * TILE_SIZE + threadIdx.x;
+        if (row < N && a_col < N) {
+            As[threadIdx.y][threadIdx.x] = A[row * N + a_col];
+        } else {
+            As[threadIdx.y][threadIdx.x] = 0.0f;
+        }
+
+        // Load a tile of B from global memory into shared memory
+        int b_row = t * TILE_SIZE + threadIdx.y;
+        if (b_row < N && col < N) {
+            Bs[threadIdx.y][threadIdx.x] = B[b_row * N + col];
+        } else {
+            Bs[threadIdx.y][threadIdx.x] = 0.0f;
+        }
+
+        __syncthreads();
+
+        // Compute partial dot product for this tile
+        #pragma unroll
+        for (int k = 0; k < TILE_SIZE; k++) {
+            sum += As[threadIdx.y][k] * Bs[k][threadIdx.x];
+        }
+
+        __syncthreads();
+    }
+
+    // Write the result to C if within bounds
+    if (row < N && col < N) {
+        C[row * N + col] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.is_cuda(), "Input A must be a CUDA tensor");
+    TORCH_CHECK(B.is_cuda(), "Input B must be a CUDA tensor");
+    TORCH_CHECK(A.dim() == 2, "Input A must be a 2D tensor");
+    TORCH_CHECK(B.dim() == 2, "Input B must be a 2D tensor");
+    TORCH_CHECK(A.size(0) == A.size(1), "Input A must be square");
+    TORCH_CHECK(B.size(0) == B.size(1), "Input B must be square");
+    TORCH_CHECK(A.size(0) == B.size(0), "Input A and B must be the same size");
+
+    int N = A.size(0);
+    auto C = torch::zeros_like(A);
+
+    // Define block and grid sizes based on the tile size
+    dim3 blockDim(TILE_SIZE, TILE_SIZE);
+    dim3 gridDim((N + TILE_SIZE - 1) / TILE_SIZE, (N + TILE_SIZE - 1) / TILE_SIZE);
+
+    // Launch the CUDA kernel
+    matmul_shared_kernel<<<gridDim, blockDim>>>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), N);
+
+    // Check for kernel launch errors
+    cudaError_t err = cudaGetLastError();
+    TORCH_CHECK(err == cudaSuccess, "CUDA kernel failed: ", cudaGetErrorString(err));
+
+    return C;
+}"""
+
+cpp_source = """torch::Tensor forward(torch::Tensor A, torch::Tensor B);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, A, B):
+        return custom_ops.forward(A, B)

@@ -1,0 +1,171 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <vector>
+
+// Custom CUDA kernel for elementwise addition with loop unrolling
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with loop unrolling
+__global__ void elementwise_mul_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise subtraction with loop unrolling
+__global__ void elementwise_subtract_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] - b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise division with loop unrolling
+__global__ void elementwise_div_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] / b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise ReLU with loop unrolling
+__global__ void elementwise_relu_kernel(const float* a, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] > 0.0f ? a[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with loop unrolling
+__global__ void elementwise_mul_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx] > 0.0f ? a[idx] * b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with loop unrolling
+__global__ void elementwise_add_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx] > 0.0f ? a[idx] + b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise subtraction with loop unrolling
+__global__ void elementwise_subtract_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] - b[idx] > 0.0f ? a[idx] - b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise division with loop unrolling
+__global__ void elementwise_div_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] / b[idx] > 0.0f ? a[idx] / b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with loop unrolling
+__global__ void elementwise_mul_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx] > 0.0f ? a[idx] * b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with loop unrolling
+__global__ void elementwise_add_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx] > 0.0f ? a[idx] + b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise subtraction with loop unrolling
+__global__ void elementwise_subtract_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] - b[idx] > 0.0f ? a[idx] - b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise division with loop unrolling
+__global__ void elementwise_div_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] / b[idx] > 0.0f ? a[idx] / b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with loop unrolling
+__global__ void elementwise_mul_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx] > 0.0f ? a[idx] * b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with loop unrolling
+__global__ void elementwise_add_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx] > 0.0f ? a[idx] + b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise subtraction with loop unrolling
+__global__ void elementwise_subtract_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] - b[idx] > 0.0f ? a[idx] - b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise division with loop unrolling
+__global__ void elementwise_div_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] / b[idx] > 0.0f ? a[idx] / b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with loop unrolling
+__global__ void elementwise_mul_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx] > 0.0f ? a[idx] * b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with loop unrolling
+__global__ void elementwise_add_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx] > 0.0f ? a[idx] + b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise subtraction with loop unrolling
+__global__ void elementwise_subtract_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] - b[idx] > 0.0f ? a[idx] - b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise division with loop unrolling
+__global__ void elementwise_div_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx

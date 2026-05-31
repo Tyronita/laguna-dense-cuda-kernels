@@ -1,0 +1,56 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void optimized_fused_kernel(
+    const float* input,
+    float* output,
+    int size,
+    int dim,
+    int stride,
+    int chunk_size) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int chunk_idx = idx / chunk_size;
+    int local_idx = idx % chunk_size;
+    
+    if (chunk_idx < chunk_size && local_idx < size) {
+        // Process elements in chunks
+        for (int i = 0; i < chunk_size; i++) {
+            int global_idx = chunk_idx * chunk_size + i;
+            if (global_idx < size) {
+                float val = input[global_idx];
+                output[global_idx] = val + 1.0f;
+            }
+        }
+    }
+}
+
+torch::Tensor forward(
+    torch::Tensor x,
+    int64_t dim,
+    torch::Tensor out) {
+    
+    auto size = x.numel();
+    const int threads = 256;
+    const int chunk_size = 256;
+    const int num_blocks = (size + threads - 1) / threads;
+    
+    optimized_fused_kernel<<<num_blocks, threads>>>(
+        x.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size,
+        dim,
+        0,
+        chunk_size
+    );
+    
+    return out;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "Optimized fused kernel with loop unrolling");
+}
+```
+</assistant>

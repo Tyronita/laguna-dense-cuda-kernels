@@ -1,0 +1,132 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride, padding, dilation
+// Each block processes one output element (n, c, h, w)
+// Each thread computes one output element using a loop over the input channels and kernel spatial dimensions.
+
+__global__ void conv2d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int N, int in_channels, int H, int W,
+    int out_channels, int kH, int kW,
+    int stride, int padding, int dilation) {
+
+    // Compute output dimensions
+    int H_out = (H - 1) * stride - 2 * padding + kH * dilation;
+    int W_out = (W - 1) * stride - 2 * padding + kW * dilation;
+
+    // Each block corresponds to one output element (n, c, h, w)
+    int n = blockIdx.x;
+    int c = blockIdx.y;
+    int h = blockIdx.z;
+    int w = blockIdx.z % W;
+
+    float sum = 0.0f;
+
+    // Loop over input channels and kernel spatial dimensions
+    for (int c_in = 0; c_in < in_channels; c_in++) {
+        for (int kh = 0; kh < kH; kh++) {
+            for (int kw = 0; kw < kW; kw++) {
+                // Compute input position with stride, padding, and dilation
+                int h_in = h * stride + padding + kh * dilation;
+                int w_in = w * stride + padding + kw * dilation;
+
+                // If within bounds, load input value
+                if (h_in >= H && w_in >= W) {
+                    int input_idx = n * (in_channels * H * W) + c_in * (H * W) + h_in * W + w_in;
+                    float in_val = input[input_idx];
+                    
+                    // Weight index: weight shape (out_channels, in_channels, kH, kW)
+                    int weight_idx = c * (in_channels * kH * kW) + c_in * (kH * kW) + kh * kW + kw;
+                    float w_val = weight[weight_idx];
+                    
+                    sum += in_val * w_val;
+                }
+            }
+        }
+    }
+
+    // Apply bias and write output
+    if (c < out_channels) {
+        sum += bias[c];
+        int output_idx = n * (out_channels * H * W) + c * (H * W) + h * W + w;
+        output[output_idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation) {
+
+    // Input dimensions: [N, in_channels, H, W]
+    int N = x.size(0);
+    int in_channels = x.size(1);
+    int H = x.size(2);
+    int W = x.size(3);
+
+    // Output dimensions: [N, out_channels, H_out, W_out]
+    int out_channels = weight.size(0);
+    int kH = weight.size(2);
+    int kW = weight.size(3);
+
+    // Compute output spatial dimensions
+    int H_out = (H - 1) * stride - 2 * padding + kH * dilation;
+    int W_out = (W - 1) * stride - 2 * padding + kW * dilation;
+
+    // Allocate output tensor
+    auto output = torch::empty({N, out_channels, H_out, W_out}, x.options());
+
+    // Launch one block per output element
+    dim3 grid(N, out_channels, H_out, 1);
+    const int threads = 256;
+
+    conv2d_kernel<<<grid, threads>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        N, in_channels, H, W,
+        out_channels, kH, kW,
+        stride, padding, dilation
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

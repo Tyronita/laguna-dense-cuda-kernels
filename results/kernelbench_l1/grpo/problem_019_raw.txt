@@ -1,0 +1,35 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdexcept>
+
+// Custom CUDA kernel for ReLU activation with improved block size
+__global__ void relu_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        output[idx] = input[idx] > 0.0f ? input[idx] : 0.0f;
+    }
+}
+
+// C++ interface for ReLU kernel
+torch::Tensor relu_cuda(torch::Tensor input) {
+    int size = input.numel();
+    auto output = torch::empty_like(input);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    relu_kernel<<<num_blocks, block_size>>>(input.data_ptr<float>(), output.data_ptr<float>(), size);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorString(err));
+    }
+    return output;
+}
+
+// Pybind11 module definition
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &relu_cuda, "ReLU activation with optimized block size (CUDA)");
+}
+```
+</assistant>
