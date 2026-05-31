@@ -65,12 +65,12 @@ steps. **Resume** by pointing `--student-model` at the latest `checkpoint-step-N
 `EvanOLeary/laguna-xs2-dense-k8-recon` (`…-kernelmix` for the V2 mix).
 
 ## 3. Stage 3 — SFT (two mixes)
-**Mix A — general recovery** (`scripts/02_train_dense_sft.py`, OpenCodeInstruct, seq 8192, lr
+**Mix A — general recovery** (`scripts/02_sft_general.py`, OpenCodeInstruct, seq 8192, lr
 5e-5, 500 steps, `--train-norms --train-lm-head`, optional `--kd-*` logit-KD). Supports
 `--resume-from-checkpoint` and periodic eval (`--eval-every`).
-**Mix B — CUDA** (`scripts/sft_kernel.py`):
+**Mix B — CUDA** (`scripts/02_sft_cuda.py`):
 ```bash
-python scripts/sft_kernel.py \
+python scripts/02_sft_cuda.py \
     --student-model EvanOLeary/laguna-xs2-dense-k8-kernelmix \
     --dataset SakanaAI/AI-CUDA-Engineer-Archive --splits level_1,level_2 \
     --max-steps 400 --seq-len 2048 --grad-accum-steps 8 --learning-rate 1e-5 \
@@ -82,7 +82,7 @@ starting point _and_ the frozen reference** for both.
 
 ---
 
-## 4. Deep guide — GRPO (`scripts/grpo_kernel.py`)
+## 4. Deep guide — GRPO (`scripts/03_grpo.py`)
 
 **What it is.** Online RL with a *verifiable* reward (RLVR): for each task, sample **G** kernels,
 score each by actually compiling + running it, and push the policy toward the above-average
@@ -98,7 +98,7 @@ with no reward spread), with a **KL anchor** to the frozen SFT model.
 5. Per sample: `loss = −(adv · logπ / n_tok) + β·KL(π‖π_ref)`, `β=0.02`; backprop; clip 1.0; step.
 
 ```bash
-python scripts/grpo_kernel.py \
+python scripts/03_grpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --group-size 6 --max-new-tokens 400 \
     --lr 1e-6 --kl-beta 0.02 --temperature 0.9 --steps 30 \
@@ -126,7 +126,7 @@ dominated by compilation, not the GPU.
 
 ---
 
-## 5. Deep guide — DPO (`scripts/dpo_sakana.py`)
+## 5. Deep guide — DPO (`scripts/04_dpo.py`)
 
 **What it is.** *Offline* preference learning — no live compilation. It mines the Sakana
 archive's evolutionary trajectory: per task, **prefer the correct + fastest kernel over an
@@ -145,7 +145,7 @@ L = −log σ(Δ)
 Reference = the frozen SFT model (implicit KL anchor); trainable = `routed_dense + lm_head`.
 
 ```bash
-python scripts/dpo_sakana.py \
+python scripts/04_dpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --splits level_1,level_2 --max-tasks 200 --pairs-per-task 8 \
     --beta 0.1 --lr 5e-7 --steps 300 --max-len 1536 \

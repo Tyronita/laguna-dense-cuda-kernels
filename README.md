@@ -210,9 +210,9 @@ order-dependent, contaminated results. **Compile + run each kernel in its own su
 ## 10 · Repo contents
 | Path | What |
 |---|---|
-| `scripts/sft_kernel.py` | CUDA SFT (PyTorch→CUDA, correct kernels, chat-formatted) |
+| `scripts/02_sft_cuda.py` | CUDA SFT (PyTorch→CUDA, correct kernels, chat-formatted) |
 | `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + Triton eval, timeout-guarded |
-| `scripts/grpo_kernel.py` | GRPO/RLVR (Dr.GRPO + DAPO dynamic sampling + KL anchor) |
+| `scripts/03_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO dynamic sampling + KL anchor) |
 | `scripts/eval_worker.py` + `eval_10ops_isolated.py` | **isolated** KernelBench-Lite eval |
 | `scripts/head_to_head.py` | ours vs teacher (tok/s + correctness) |
 | `scripts/ablate_api_hint.py` / `ablate_triton.py` | prompt ablations (CUDA / Triton) |
