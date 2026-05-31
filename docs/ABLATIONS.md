@@ -42,7 +42,7 @@ Teacher correct: ReLU 0.70× · Tanh 0.65× · Abs 0.71× · SiLU 0.87× (all <1
 ## Baseline B — Variety test (ours, k=1, CUDA + Triton)
 CUDA (run-tested): Tanh ✅0.92×, ReLU ✅(earlier), GeLU compiled-but-wrong, Sigmoid/Softmax fail.
 Triton (clean prompt): ReLU/GeLU/Softmax all emit valid `@triton.jit` (structurally right, buggy idioms).
-**Finding:** both languages work; CUDA stronger than Triton (SFT was CUDA-only). Triton needs SFT data or RFT.
+**Finding:** both languages work; CUDA stronger than Triton (SFT was CUDA-only). Triton needs SFT data or GRPO.
 
 ## Baseline C — SFT KernelBench-Lite (ReLU, best-of-4)
 ReLU compile+correct ✅ 0.93×. fast_0 ≥1/op achievable with k=4.
@@ -57,6 +57,6 @@ ReLU compile+correct ✅ 0.93×. fast_0 ≥1/op achievable with k=4.
 - [ ] prompt: SFT-format vs plain; CUDA-only vs Triton-only system
 
 ## Training-side variants (retraining — separate, later)
-- K experts (8 → 16/32), dense FFN width, hybrid partial densification, +reasoning SFT data, RFT.
+- K experts (8 → 16/32), dense FFN width, hybrid partial densification, +reasoning SFT data, GRPO.
 
 *Refs: RADLADS 2505.03005 · MoE→Dense 2605.28207 · Dr.GRPO · DAPO · robust-kbench 2509.14279 · KernelBench.*

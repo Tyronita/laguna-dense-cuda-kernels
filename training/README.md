@@ -14,13 +14,13 @@ teacher: a 33.4B-total / 3.0B-active MoE, 256 experts top-8) into **Laguna Dense
 
 | Stage | Script | Method | Trainable | Loss | Tokens |
 |---|---|---|---|---|---|
-| **0 · Build + warm-start** | `scripts/0000_build_dense_placeholder.py` (+ `densify_layer.py`) | copy shell from teacher; **DO-ACP** select K=8 experts → concat into one SwiGLU; fold 2.5×α into down-proj | — (init) | — | 0 |
-| **1 · Reconstruction** | `scripts/0001_train_dense_reconstruction.py` | teacher-forced per-layer activation matching, all 39 layers in parallel | `routed_dense` | `mean_ℓ(MSE + 0.05·(1−cos)) ÷ mean(y²)` | 0.3–0.7B |
-| **2 · Logit-KD** *(optional)* | `scripts/0002_sft_general.py --kd-*` | full student forward, KL to teacher logits | `routed_dense (+norms)` | `KL(student‖teacher) + CE` | 0.5–4B |
-| **3a · SFT Mix A** | `scripts/0002_sft_general.py` | general-code recovery on OpenCodeInstruct | `routed_dense + norms + lm_head` | CE | ~10M |
-| **3b · SFT Mix B** | `scripts/0002_sft_cuda.py` | CUDA recovery on Sakana AI-CUDA-Engineer | `routed_dense + lm_head + norms` | CE | ~3.5M |
-| **4 · GRPO** | `scripts/0003_grpo.py` | Dr.GRPO + DAPO, verifiable kernel reward | `routed_dense + lm_head` | policy-gradient + KL anchor | — |
-| **5 · DPO** | `scripts/0004_dpo.py` | offline preference (correct+fast ≻ incorrect/slow) | `routed_dense + lm_head` | DPO (Rafailov) | — |
+| **0 · Build + warm-start** | `scripts/000_build_dense_placeholder.py` (+ `densify_layer.py`) | copy shell from teacher; **DO-ACP** select K=8 experts → concat into one SwiGLU; fold 2.5×α into down-proj | — (init) | — | 0 |
+| **1 · Reconstruction** | `scripts/001_train_dense_reconstruction.py` | teacher-forced per-layer activation matching, all 39 layers in parallel | `routed_dense` | `mean_ℓ(MSE + 0.05·(1−cos)) ÷ mean(y²)` | 0.3–0.7B |
+| **2 · Logit-KD** *(optional)* | `scripts/002_sft_general.py --kd-*` | full student forward, KL to teacher logits | `routed_dense (+norms)` | `KL(student‖teacher) + CE` | 0.5–4B |
+| **3a · SFT Mix A** | `scripts/002_sft_general.py` | general-code recovery on OpenCodeInstruct | `routed_dense + norms + lm_head` | CE | ~10M |
+| **3b · SFT Mix B** | `scripts/002_sft_cuda.py` | CUDA recovery on Sakana AI-CUDA-Engineer | `routed_dense + lm_head + norms` | CE | ~3.5M |
+| **4 · GRPO** | `scripts/003_grpo.py` | Dr.GRPO + DAPO, verifiable kernel reward | `routed_dense + lm_head` | policy-gradient + KL anchor | — |
+| **5 · DPO** | `scripts/004_dpo.py` | offline preference (correct+fast ≻ incorrect/slow) | `routed_dense + lm_head` | DPO (Rafailov) | — |
 
 Architecture of the swap (one decoder layer):
 
@@ -64,7 +64,7 @@ of the network verbatim.
 
 ```bash
 # Build the dense placeholder (copied shell from the teacher; routed_dense to be filled):
-python scripts/0000_build_dense_placeholder.py \
+python scripts/000_build_dense_placeholder.py \
     --source-model poolside/Laguna-XS.2 \
     --k-routed 8 \
     --target-dir outputs/laguna-dense-k8-copied-shell
@@ -98,7 +98,7 @@ teacher `mlp` captures input `x_ℓ` and output `y_ℓ = 2.5·Σ(top-8 experts)+
 MLP is fed the *teacher's* `x_ℓ`; loss matches `ŷ_ℓ` to `y_ℓ`.
 
 ```bash
-python scripts/0001_train_dense_reconstruction.py \
+python scripts/001_train_dense_reconstruction.py \
     --teacher-model  poolside/Laguna-XS.2 \
     --student-model  outputs/laguna-dense-k8-copied-shell \
     --datasets "GPUMODE/KernelBook:0.40,nvidia/OpenCodeInstruct:0.30,SakanaAI/AI-CUDA-Engineer-Archive:0.20:level_1,ppbhatt500/kernelbook-triton-multiturn-reasoning-traces:0.10" \
@@ -126,7 +126,7 @@ Output: `outputs/recon_v2/checkpoint-final` → pushed as `EvanOLeary/laguna-xs2
 
 **Mix A — general-code recovery** (recovers chat + broad code generation):
 ```bash
-python scripts/0002_sft_general.py \
+python scripts/002_sft_general.py \
     --model outputs/recon_v2/checkpoint-final \
     --dataset data/opencodeinstruct_chat.jsonl \
     --seq-len 8192 --lr 5e-5 --max-steps 500 \
@@ -137,7 +137,7 @@ python scripts/0002_sft_general.py \
 
 **Mix B — CUDA kernels** (PyTorch → CUDA-C++, correct kernels only):
 ```bash
-python scripts/0002_sft_cuda.py \
+python scripts/002_sft_cuda.py \
     --student-model EvanOLeary/laguna-xs2-dense-k8-kernelmix \
     --dataset SakanaAI/AI-CUDA-Engineer-Archive --splits level_1,level_2 \
     --max-steps 400 --seq-len 2048 --grad-accum-steps 8 --learning-rate 1e-5 \
@@ -149,7 +149,7 @@ Trainable scope in both: `routed_dense + lm_head + norms` (attention frozen, no 
 
 ## 4. Stage 4 — GRPO (verifiable RL for kernels)
 
-`scripts/0003_grpo.py` — **Dr.GRPO** (advantage = `r − mean(r)`, no std/length norm) +
+`scripts/003_grpo.py` — **Dr.GRPO** (advantage = `r − mean(r)`, no std/length norm) +
 **DAPO dynamic sampling** (skip zero-variance groups). Reward is the verifiable
 `src/densify/kernel_reward.py` signal:
 
@@ -160,7 +160,7 @@ parse +0.10 · compile +0.20 · correct vs eager +0.40 · speedup +0.30·min(spd
 vs the eager reference, times 50 iters; SIGALRM-guarded. A Triton path exists too.)
 
 ```bash
-python scripts/0003_grpo.py \
+python scripts/003_grpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --group-size 6 --max-new-tokens 400 \
     --lr 1e-6 --kl-beta 0.02 --temperature 0.9 --steps 30 \
@@ -172,12 +172,12 @@ Trainable `routed_dense + lm_head`; the SFT model is also the frozen KL referenc
 
 ## 5. Stage 5 — DPO (offline preference)
 
-`scripts/0004_dpo.py` — mines the Sakana archive's evolutionary traces: per task, **prefer
+`scripts/004_dpo.py` — mines the Sakana archive's evolutionary traces: per task, **prefer
 the correct + fastest kernel over an incorrect/slower one** (verified `Correct` +
 `CUDA_Speedup_Native`), no live compilation.
 
 ```bash
-python scripts/0004_dpo.py \
+python scripts/004_dpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --splits level_1,level_2 --max-tasks 200 --pairs-per-task 8 \
     --beta 0.1 --lr 5e-7 --steps 300 \
@@ -206,8 +206,8 @@ model; trainable `routed_dense + lm_head`.
 ## 8. Provenance
 - **Ported from `cm2435/laguna-xs2-expert-coactivation-scheduling`** (branch
   `recipe/paper-aligned-densification-kernel-data` @ `7b9dd15`, and `docs/dense-placeholder-training-plan`):
-  `densify_layer.py`, `reconstruction.py`, `dense_checkpoint/*`, `0000_build_dense_placeholder.py`,
-  `0001_train_dense_reconstruction.py`, `0002_sft_general.py`.
-- **Already in this repo:** `0002_sft_cuda.py`, `0003_grpo.py`, `0004_dpo.py`,
-  `003_rft_offline.py`, `src/densify/kernel_reward.py`, eval harnesses.
+  `densify_layer.py`, `reconstruction.py`, `dense_checkpoint/*`, `000_build_dense_placeholder.py`,
+  `001_train_dense_reconstruction.py`, `002_sft_general.py`.
+- **Already in this repo:** `002_sft_cuda.py`, `003_grpo.py`, `004_dpo.py`,
+  `003_grpo_offline.py`, `src/densify/kernel_reward.py`, eval harnesses.
 - Papers: RADLADS arXiv:2505.03005 · KRAFTON MoE→Dense arXiv:2605.28207.

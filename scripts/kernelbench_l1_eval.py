@@ -1,5 +1,5 @@
 """
-KernelBench evaluation for laguna-xs2 models (GRPO, RFT, DPO).
+KernelBench evaluation for laguna-xs2 models (GRPO, GRPO, DPO).
 
 Uses HuggingFace transformers with proper chat template + KernelBench eval.
 Target: A100 80GB on Azure VM.

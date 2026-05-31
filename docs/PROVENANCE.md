@@ -96,11 +96,11 @@ rew  = 0.10 if parsed else -0.10
 rew += 0.20 if compiled else 0.0
 rew += 0.40 if correct  else 0.0
 rew += 0.30 * min(speedup, 3.0)/3.0 if correct else 0.0
-# 0003_grpo.py — Dr.GRPO advantage + DAPO dynamic sampling
+# 003_grpo.py — Dr.GRPO advantage + DAPO dynamic sampling
 if rt.std() < 1e-6: continue                 # DAPO: skip zero-variance group
 adv  = rt - rt.mean()                         # Dr.GRPO: no std/length norm
 loss = -(adv[g] * lp / ntok) + kl_beta * kl   # PG + KL anchor to SFT ref
-# 0004_dpo.py — DPO (Rafailov) on Sakana traces
+# 004_dpo.py — DPO (Rafailov) on Sakana traces
 delta = beta * ((lc - rc) - (lr - rr)); loss = -F.logsigmoid(delta)
 ```
 **Result:** C4 analysis — **~158 eff-experts/layer, Gini 0.528, coactivation 2.09×**; kernel-SFT HumanEval 1/10; ReLU 3/4·Tanh 3/4·**Sigmoid 0/4**, ~2/5 k=1; **11× smaller, 12× less VRAM, +26% faster** vs teacher.

@@ -159,8 +159,8 @@ seeded streaming interleave):
 **Data-hygiene items to clean on cm2435:**
 1. **Sakana split** must be `level_1/level_2`, **not `train`** — the wrong-split bug silently drops all CUDA rows (already fixed in `reconstruction_data` + the `:split` syntax; ensure every config uses it).
 2. **Field handler** (`reconstruction_data.format_sft_row`) must recognize the `query`/`kernel`/`code` schemas (KernelBook/CUDA) or those rows are skipped → mix silently degrades to OpenCode-only.
-3. **`Correct==True` filter** on Sakana for SFT/DPO (hold out `CUDA_Speedup_Native`/`NCU_Profile`/`Clang_Tidy` for the RFT reward, not for SFT).
-4. **De-dup & decontaminate** against KernelBench tasks before RFT to avoid reward-hacking on seen solutions.
+3. **`Correct==True` filter** on Sakana for SFT/DPO (hold out `CUDA_Speedup_Native`/`NCU_Profile`/`Clang_Tidy` for the GRPO reward, not for SFT).
+4. **De-dup & decontaminate** against KernelBench tasks before GRPO to avoid reward-hacking on seen solutions.
 
 ---
 

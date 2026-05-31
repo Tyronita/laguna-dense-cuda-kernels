@@ -22,9 +22,9 @@ Three arms, all from SFT-extended, using different RL methods:
 
 | Arm | HF name | Script | Method | Data | Online? |
 |---|---|---|---|---|---|
-| **GRPO-offline** | `cuda-grpo` | `003_rft_offline.py` | Dr.GRPO + DAPO | SakanaAI traces grouped by Task_ID (~120 tasks) | **No** — uses pre-recorded `Correct` + `CUDA_Speedup_Native` |
-| **GRPO-online** | `cuda-rft` | `0003_grpo.py` | Dr.GRPO + DAPO | Model's own generations on elementwise ops | **Yes** — live compilation + verification in subprocess |
-| **DPO** | `cuda-dpo` | `0004_dpo.py` | DPO (Rafailov et al.) | SakanaAI preference pairs (correct+fast ≻ incorrect/slow) | **No** — preferences from dataset |
+| **GRPO-offline** | `cuda-grpo` | `003_grpo_offline.py` | Dr.GRPO + DAPO | SakanaAI traces grouped by Task_ID (~120 tasks) | **No** — uses pre-recorded `Correct` + `CUDA_Speedup_Native` |
+| **GRPO-online** | `cuda-rft` | `003_grpo.py` | Dr.GRPO + DAPO | Model's own generations on elementwise ops | **Yes** — live compilation + verification in subprocess |
+| **DPO** | `cuda-dpo` | `004_dpo.py` | DPO (Rafailov et al.) | SakanaAI preference pairs (correct+fast ≻ incorrect/slow) | **No** — preferences from dataset |
 
 ### GRPO-offline (`cuda-grpo`)
 - Groups ~6 candidate kernels per Task_ID from SakanaAI archive
@@ -61,7 +61,7 @@ Three arms, all from SFT-extended, using different RL methods:
 | `cuda-rft` | Online GRPO with live compilation (not rejection fine-tuning) |
 | `cuda-dpo` | DPO (this one's correct) |
 
-The naming arose historically: "RFT" was initially planned as rejection sampling, but the implementation evolved into online GRPO with verifiable reward. The "GRPO" model was the second attempt that used the Sakana dataset directly instead of live compilation.
+The naming arose historically: "GRPO" was initially planned as rejection sampling, but the implementation evolved into online GRPO with verifiable reward. The "GRPO" model was the second attempt that used the Sakana dataset directly instead of live compilation.
 
 ## Models
 | Stage | HF | Training |
