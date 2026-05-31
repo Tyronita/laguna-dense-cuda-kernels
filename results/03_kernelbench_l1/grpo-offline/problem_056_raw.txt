@@ -1,0 +1,43 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride, padding, dilation
+// Each block processes one output element (n, c, h, w)
+__global__ void conv2d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int N, int in_channels, int H, int W,
+    int out_channels, int kH, int kW,
+    int stride, int padding, int dilation) {
+
+    // Compute output dimensions
+    int H_out = (H - 1) * stride - 2 * padding + kH * dilation;
+    int W_out = (W - 1) * stride - 2 * padding + kW * dilation;
+
+    // Each block corresponds to one output element
+    int n = blockIdx.x;
+    int c = blockIdx.y;
+    int h = blockIdx.z;
+    int w = blockIdx.z;
+
+    float sum = 0.0f;
+
+    // Loop over input channels and kernel elements
+    for (int c_in = 0; c_in < in_channels; c_in++) {
+        for (int kh = 0; kh < kH; kh++) {
+            for (int kw = 0; kw < kW; kw++) {
+                // Compute input indices with stride, padding, dilation
+                int h_in = h * stride + padding + kh * dilation;
+                int w_in = w * stride + padding + kw * dilation;
+
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
+                    // Index for input tensor: [N, c_in, h_in, w_in]
+                    int input_idx = n * (in_channels * H * W) + c_in * (H * W) + h_in * W + w_in;
+                    // Index for weight tensor: [c_in, out_channels, kH, kW]
+                    int weight_idx = c_in * (out_channels * kH * kW) + 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

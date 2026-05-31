@@ -1,0 +1,90 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA kernel for RMS normalization
+__global__ void rms_norm_kernel(const float* input, float* output, int size, int features, float eps) {
+    extern __shared__ float shared_mem[];
+    int tid = threadIdx.x;
+    int bid = blockIdx.x;
+    int feature_idx = bid % features;
+    int offset = (bid / features) * features * size;
+
+    // Load feature data into shared memory
+    for (int i = tid; i < features; i += blockDim.x) {
+        shared_mem[i] = input[offset + i];
+    }
+    __syncthreads();
+
+    // Compute mean and variance for the feature
+    float sum = 0.0f;
+    float count = 0.0f;
+    for (int i = 0; i < features; i++) {
+        sum += shared_mem[i] * shared_mem[i];
+        count += features;
+    }
+
+    // Compute RMS normalization
+    float rms = (sum / count) * (sum + 1.0f) * (sum - 1.0f) * (1.0f - sum * sum * sum);
+    float normalized = (input[offset + tid] / (rms + eps)) * (1.0f - sum * sum * sum);
+
+    // Write result
+    if (tid < features) {
+        output[offset + tid] = normalized;
+    }
+}
+
+// C++ interface for elementwise addition
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// C++ interface for RMS normalization
+torch::Tensor rms_norm_cuda(torch::Tensor x, int64_t num_features, float eps) {
+    auto size = x.numel();
+    auto features = num_features;
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    const int shared_mem_size = features * sizeof(float);
+    
+    rms_norm_kernel<<<num_blocks, block_size, shared_mem_size>>>(x.data_ptr<float>(), output.data_ptr<float>(), size, features, eps);
+    return output;
+}"""
+
+cpp_source = """torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);\ntorch::Tensor rms_norm_cuda(torch::Tensor x, int64_t num_features, float eps);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['elementwise_add_cuda', 'rms_norm_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.elementwise_add_cuda(x)

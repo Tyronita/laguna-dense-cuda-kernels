@@ -1,0 +1,86 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride=1, padding=0, dilation=1
+// Assumes kernel_size is (kernel_size, 1) and input is square.
+
+__global__ void conv2d_kernel(const float* input, const float* weight, const float* bias,
+                               float* output, int N, int C, int H, int W) {
+    // Compute output dimensions
+    int H_out = H;
+    int W_out = W;
+    int total = N * C * H_out * W_out;
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < total) {
+        // Decode output indices
+        int w_out = idx % W_out;
+        int temp = idx / W_out;
+        int h_out = temp % H_out;
+        temp / H_out;
+        int c_out = temp % C;
+
+        float sum = bias[c_out];
+
+        // Convolution: input shape (N, C, H, W) and weight shape (C, H, 1)
+        for (int c_in = 0; c_in < C; c_in++) {
+            for (int h_in = 0; h_in < H; h_in++) {
+                int input_idx = ((N * C + c_in) * H + h_in) * W + w_out;
+                int weight_idx = ((c_in * H + h_in) * 1) + 1;
+                sum += input[input_idx] * weight[weight_idx];
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor conv2d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias) {
+    // Input: [N, C, H, W]
+    // Weight: [C, H, 1]
+    int N = input.size(0);
+    int C = input.size(1);
+    int H = input.size(2);
+    int W = input.size(3);
+
+    int H_out = H;
+    int W_out = W;
+    int total = N * C * H_out * W_out;
+
+    auto output = torch::empty({N, C, H_out, W_out}, input.options());
+
+    const int block_size = 256;
+    const int num_blocks = (total + block_size - 1) / block_size;
+
+    conv2d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        N, C, H, W
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor conv2d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['conv2d_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.conv2d_cuda(x)

@@ -1,0 +1,59 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) { out[idx] = a[idx] + b[idx];
+    }
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+torch::Tensor mean_reduce_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto out = torch::empty_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    const float* input_ptr = x.data_ptr<float>();
+    float* output_ptr = out.data_ptr<float>();
+    float sum = 0.0f;
+    for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < size; idx += blockDim.x * gridDim.x) {
+        sum += input_ptr[idx];
+    }
+    atomicAdd(output_ptr, sum);
+    return out / static_cast(torch::Tensor>(x.size(1) + 1e-5f));
+}
+
+torch::Tensor forward(torch::Tensor a, torch::Tensor b) {
+    return elementwise_add_cuda(a, b);
+}"""
+
+cpp_source = """torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);\ntorch::Tensor mean_reduce_cuda(torch::Tensor x, int dim);\ntorch::Tensor forward(torch::Tensor a, torch::Tensor b);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['elementwise_add_cuda', 'mean_reduce_cuda', 'forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.elementwise_add_cuda(x)
