@@ -62,14 +62,14 @@ Those results show ReLU/Tanh at ~70% correct, while harder ops (Sigmoid/GeLU) fa
 ## File Structure
 ```
 results/kernelbench_l1/
-├── grpo/                          # GRPO model results
+├── grpo-offline/                          # GRPO model results
 │   ├── problem_NNN_raw.txt       # Raw model output (100 files)
 │   ├── kernels/                  # Wrapped Python+CUDA kernels
 │   │   └── problem_NNN_kernel.py
 │   ├── problem_NNN_result.json   # Per-problem eval results
 │   ├── summary.json              # Aggregate metrics
 │   └── all_results.json          # All results in one file
-├── rft/                           # RFT model results (same structure)
+├── grpo-online/                           # RFT model results (same structure)
 ├── dpo/                           # DPO model results (same structure)
 └── comparison.json                # Side-by-side final comparison
 ```
