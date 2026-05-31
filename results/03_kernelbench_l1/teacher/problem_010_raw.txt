@@ -1,0 +1,50 @@
+
+```python
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+matmul_3d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void matmul_3d_kernel(const float* A, const float* B, float* C, int N, int M, int K, int L) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < N && col < L) {
+        float sum = 0.0f;
+        for (int k = 0; k < K; ++k) {
+            sum += A[row * K + k] * B[k * L + col];
+        }
+        C[row * L + col] = sum;
+    }
+}
+
+torch::Tensor matmul_3d_cuda(torch::Tensor A, torch::Tensor B) {
+    int N = A.size(0);
+    int M = A.size(1);
+    int K = A.size(2);
+    int L = B.size(1);
+    
+    auto C = torch::zeros({N, M, L}, A.options());
+    
+    const int block_size = 16;
+    dim3 block(block_size, block_size);
+    dim3 grid((N + block_size - 1) / block_size, (L + block_size - 1) / block_size);
+    
+    matmul_3d_kernel<<<grid, block>>>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), N, M, K, L);
+    return C;
+}
+"""
+matmul_3d_cpp_source = "torch::Tensor matmul_3d_cuda(torch::Tensor A, torch::Tensor B);"
+matmul_3d = load_inline(name="matmul_3d", cpp_sources=matmul_3d_cpp_source, cuda_sources=matmul_3d_source, functions=["matmul_3d_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+        self.matmul_3d = matmul_3d
+
+    def forward(self, A, B):
+        return self.matmul_3d.matmul_3d_cuda(A, B)
+```
+</assistant>

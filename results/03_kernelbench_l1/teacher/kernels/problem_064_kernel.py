@@ -1,0 +1,174 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+conv_transpose1d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+template<typename scalar_t>
+__global__ void conv_transpose1d_kernel(
+    const scalar_t* input,
+    const scalar_t* weight,
+    const scalar_t* bias,
+    scalar_t* output,
+    int batch_size,
+    int in_channels,
+    int out_channels,
+    int input_length,
+    int output_length,
+    int kernel_size,
+    int stride,
+    int padding,
+    int output_padding,
+    int groups
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * out_channels * output_length;
+    
+    if (idx >= total_elements) return;
+    
+    int oc = idx / (output_length * batch_size);
+    int b = (idx / output_length) % batch_size;
+    int ol = idx % output_length;
+    
+    scalar_t sum = bias != nullptr ? bias[oc] : 0;
+    
+    int in_oc = oc / (out_channels / in_channels);
+    int group_idx = oc / (out_channels / groups);
+    
+    for (int ic = 0; ic < in_channels; ic++) {
+        if (ic / (in_channels / groups) != group_idx) continue;
+        
+        int in_center = ol - padding + kernel_size / 2;
+        int out_center = ol;
+        
+        for (int k = 0; k < kernel_size; k++) {
+            int in_pos = in_center - k + (kernel_size - 1) / 2;
+            if (in_pos >= 0 && in_pos < input_length) {
+                int weight_idx = ((ic * out_channels + oc) * kernel_size) + k;
+                sum += input[b * in_channels * input_length + ic * input_length + in_pos] * weight[weight_idx];
+            }
+        }
+    }
+    
+    output[idx] = sum;
+}
+
+torch::Tensor conv_transpose1d_cuda(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int stride,
+    int padding,
+    int output_padding,
+    int groups
+) {
+    auto batch_size = input.size(0);
+    auto in_channels = input.size(1);
+    auto input_length = input.size(2);
+    auto out_channels = weight.size(0);
+    auto kernel_size = weight.size(2);
+    
+    auto output_length = (input_length - 1) * stride - 2 * padding + kernel_size + output_padding;
+    
+    auto output = torch::zeros({batch_size, out_channels, output_length}, input.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (output.numel() + block_size - 1) / block_size;
+    
+    conv_transpose1d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.defined() ? bias.data_ptr<float>() : nullptr,
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        out_channels,
+        input_length,
+        output_length,
+        kernel_size,
+        stride,
+        padding,
+        output_padding,
+        groups
+    );
+    
+    return output;
+}
+"""
+
+conv_transpose1d_cpp_source = """
+torch::Tensor conv_transpose1d_cuda(
+    torch::Tensor input,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int stride,
+    int padding,
+    int output_padding,
+    int groups
+);
+"""
+
+conv_transpose1d = load_inline(
+    name="conv_transpose1d",
+    cpp_sources=conv_transpose1d_cpp_source,
+    cuda_sources=conv_transpose1d_source,
+    functions=["conv_transpose1d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Performs a transposed 1D convolution operation using custom CUDA operators.
+
+    Args:
+        in_channels (int): Number of channels in the input tensor.
+        out_channels (int): Number of channels produced by the convolution.
+        kernel_size (int): Size of the convolution kernel.
+        stride (int, optional): Stride of the convolution. Defaults to 1.
+        padding (int, optional): Padding applied to the input. Defaults to 0.
+        output_padding (int, optional): Additional size added to one side of the output shape. Defaults to 0.
+        groups (int, optional): Number of blocked connections from input channels to output channels. Defaults to 1.
+        bias (bool, optional): If `True`, adds a learnable bias to the output. Defaults to `False`.
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, output_padding: int = 0, groups: int = 1, bias: bool = False):
+        super(ModelNew, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.output_padding = output_padding
+        self.groups = groups
+        self.bias = bias
+        
+        # Create weight and bias parameters
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, kernel_size) / (in_channels * kernel_size) ** 0.5)
+        if bias:
+            self.bias_param = nn.Parameter(torch.zeros(out_channels))
+        else:
+            self.bias_param = None
+        
+        self.conv_transpose1d = conv_transpose1d
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Performs the transposed 1D convolution.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, length).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, out_channels, length_out).
+        """
+        bias = self.bias_param if self.bias else None
+        return self.conv_transpose1d.conv_transpose1d_cuda(
+            x, 
+            self.weight, 
+            bias if bias is not None else torch.tensor([]), 
+            self.stride, 
+            self.padding, 
+            self.output_padding, 
+            self.groups
+        )

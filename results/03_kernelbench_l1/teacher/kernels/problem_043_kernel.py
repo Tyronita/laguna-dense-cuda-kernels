@@ -1,0 +1,158 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+maxpool3d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <algorithm>
+
+__global__ void maxpool3d_kernel(const float* input, float* output, int* indices,
+                                  int batch_size, int channels, int d_in, int h_in, int w_in,
+                                  int d_out, h_out, int w_out,
+                                  int kernel_size, int stride, int padding, int dilation,
+                                  bool return_indices, bool ceil_mode) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * channels * d_out * h_out * w_out;
+    if (idx >= total_elements) return;
+
+    int temp = idx;
+    int w_out_idx = temp % w_out; temp /= w_out;
+    int h_out_idx = temp % h_out; temp /= h_out;
+    int d_out_idx = temp % d_out; temp /= d_out;
+    int ch_idx = temp % channels; temp /= channels;
+    int bt_idx = temp;
+
+    int d_in_start = d_out_idx * stride - padding;
+    int h_in_start = h_out_idx * stride - padding;
+    int w_in_start = w_out_idx * stride - padding;
+
+    float max_val = -INFINITY;
+    int max_idx = 0;
+
+    for (int kd = 0; kd < kernel_size; ++kd) {
+        for (int kh = 0; kh < kernel_size; ++kh) {
+            for (int kw = 0; kw < kernel_size; ++kw) {
+                int d_in = d_in_start + kd * dilation;
+                int h_in = h_in_start + kh * dilation;
+                int w_in = w_in_start + kw * dilation;
+
+                if (d_in >= 0 && d_in < d_in && h_in >= 0 && h_in < h_in && w_in >= 0 && w_in < w_in) {
+                    int in_idx = ((bt_idx * channels + ch_idx) * d_in + h_in) * w_in + w_in;
+                    float val = input[in_idx];
+                    if (val > max_val) {
+                        max_val = val;
+                        max_idx = d_in * h_in * w_in + h_in * w_in + w_in;
+                    }
+                }
+            }
+        }
+    }
+
+    int out_idx = ((bt_idx * channels + ch_idx) * d_out + h_out_idx) * w_out + w_out_idx;
+    output[out_idx] = max_val;
+    if (return_indices) {
+        indices[out_idx] = max_idx;
+    }
+}
+
+torch::Tensor maxpool3d_cuda(torch::Tensor input, int kernel_size, int stride, int padding, 
+                              int dilation, bool return_indices, bool ceil_mode) {
+    auto batch_size = input.size(0);
+    auto channels = input.size(1);
+    auto d_in = input.size(2);
+    auto h_in = input.size(3);
+    auto w_in = input.size(4);
+
+    int d_out = (d_in + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1;
+    int h_out = (h_in + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1;
+    int w_out = (w_in + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1;
+
+    if (ceil_mode) {
+        d_out = (d_in + 2 * padding - dilation * (kernel_size - 1) + stride - 1) / stride;
+        h_out = (h_in + 2 * padding - dilation * (kernel_size - 1) + stride - 1) / stride;
+        w_out = (w_in + 2 * padding - dilation * (kernel_size - 1) + stride - 1) / stride;
+    }
+
+    auto output = torch::zeros({batch_size, channels, d_out, h_out, w_out}, input.options());
+    torch::Tensor indices_tensor;
+    if (return_indices) {
+        indices_tensor = torch::zeros({batch_size, channels, d_out, h_out, w_out}, torch::dtype(torch::kInt64));
+    }
+
+    int total_elements = batch_size * channels * d_out * h_out * w_out;
+    const int block_size = 256;
+    const int num_blocks = (total_elements + block_size - 1) / block_size;
+
+    if (return_indices) {
+        maxpool3d_kernel<<<num_blocks, block_size>>>(
+            input.data_ptr<float>(), output.data_ptr<float>(), indices_tensor.data_ptr<int>(),
+            batch_size, channels, d_in, h_in, w_in,
+            d_out, h_out, w_out,
+            kernel_size, stride, padding, dilation,
+            return_indices, ceil_mode);
+    } else {
+        maxpool3d_kernel<<<num_blocks, block_size>>>(
+            input.data_ptr<float>(), output.data_ptr<float>(), nullptr,
+            batch_size, channels, d_in, h_in, w_in,
+            d_out, h_out, w_out,
+            kernel_size, stride, padding, dilation,
+            return_indices, ceil_mode);
+    }
+
+    if (return_indices) {
+        return torch::stack({output, indices_tensor});
+    }
+    return output;
+}
+"""
+
+maxpool3d_cpp_source = """
+torch::Tensor maxpool3d_cuda(torch::Tensor input, int kernel_size, int stride, int padding, 
+                              int dilation, bool return_indices, bool ceil_mode);
+"""
+
+maxpool3d = load_inline(
+    name="maxpool3d",
+    cpp_sources=maxpool3d_cpp_source,
+    cuda_sources=maxpool3d_source,
+    functions=["maxpool3d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs Max Pooling 3D with custom CUDA implementation.
+    """
+    def __init__(self, kernel_size: int, stride: int = None, padding: int = 0, dilation: int = 1, return_indices: bool = False, ceil_mode: bool = False):
+        """
+        Initializes the Max Pooling 3D layer.
+
+        Args:
+            kernel_size (int): Size of the kernel for the max pooling operation.
+            stride (int, optional): Stride of the pooling operation. Defaults to None, which means stride is equal to kernel_size.
+            padding (int, optional): Padding applied to the input tensor. Defaults to 0.
+            dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+            return_indices (bool, optional): Whether to return indices of the maximum values. Defaults to False.
+            ceil_mode (bool, optional): When True, the output size is ceil(input_size / stride) instead of floor. Defaults to False.
+        """
+        super(ModelNew, self).__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride if stride is not None else kernel_size
+        self.padding = padding
+        self.dilation = dilation
+        self.return_indices = return_indices
+        self.ceil_mode = ceil_mode
+        self.maxpool_cuda = maxpool3d
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Max Pooling 3D to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, channels, dim1, dim2, dim3).
+
+        Returns:
+            torch.Tensor: Output tensor with Max Pooling 3D applied.
+        """
+        return self.maxpool_cuda.maxpool3d_cuda(x, self.kernel_size, self.stride, self.padding, self.dilation, self.return_indices, self.ceil_mode)

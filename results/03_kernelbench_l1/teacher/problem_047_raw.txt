@@ -1,0 +1,92 @@
+
+```python
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+sum_reduction_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void sum_reduction_kernel(const float* input, float* output, int input_size, int reduce_dim_size, int num_elements) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_elements) {
+        int stride = reduce_dim_size;
+        float sum = 0.0f;
+        for (int i = 0; i < stride; i++) {
+            sum += input[idx * stride + i];
+        }
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor sum_reduction_cuda(torch::Tensor input, int dim, bool keepdim) {
+    auto input_shape = input.sizes();
+    int reduce_dim_size = input_shape[dim];
+    int num_output_elements = 1;
+    for (int i = 0; i < input_shape.size(); i++) {
+        if (i != dim) {
+            num_output_elements *= input_shape[i];
+        }
+    }
+    
+    auto output_shape = input_shape.vec();
+    if (keepdim) {
+        output_shape[dim] = 1;
+    } else {
+        output_shape.erase(output_shape.begin() + dim);
+    }
+    
+    auto output = torch::zeros(output_shape, input.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (num_output_elements + block_size - 1) / block_size;
+    
+    sum_reduction_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(), 
+        output.data_ptr<float>(), 
+        input.numel(), 
+        reduce_dim_size, 
+        num_output_elements
+    );
+    
+    return output;
+}
+"""
+sum_reduction_cpp_source = "torch::Tensor sum_reduction_cuda(torch::Tensor input, int dim, bool keepdim);"
+sum_reduction = load_inline(
+    name="sum_reduction", 
+    cpp_sources=sum_reduction_cpp_source, 
+    cuda_sources=sum_reduction_source, 
+    functions=["sum_reduction_cuda"], 
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs sum reduction over a specified dimension.
+    """
+    def __init__(self, dim: int):
+        """
+        Initializes the model with the dimension to reduce over.
+
+        Args:
+            dim (int): Dimension to reduce over.
+        """
+        super(ModelNew, self).__init__()
+        self.dim = dim
+        self.sum_reduction = sum_reduction
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies sum reduction over the specified dimension.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (..., dim, ...).
+
+        Returns:
+            torch.Tensor: Output tensor after sum reduction, shape (..., 1, ...).
+        """
+        return self.sum_reduction.sum_reduction_cuda(x, self.dim, True)
+```
+</assistant>

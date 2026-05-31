@@ -1,0 +1,112 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+log_softmax_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <math.h>
+
+__global__ void log_softmax_kernel(const float* input, float* output, int batch_size, int dim) {
+    int batch_idx = blockIdx.x;
+    int tid = threadIdx.x;
+    
+    if (batch_idx < batch_size) {
+        const float* row = input + batch_idx * dim;
+        float* out_row = output + batch_idx * dim;
+        
+        // Shared memory for max and sum
+        extern __shared__ float shared_mem[];
+        float* shared_max = shared_mem;
+        float* shared_sum = shared_mem + blockDim.x;
+        
+        // Find max value
+        float max_val = -INFINITY;
+        for (int i = tid; i < dim; i += blockDim.x) {
+            max_val = fmaxf(max_val, row[i]);
+        }
+        shared_max[threadIdx.x] = max_val;
+        __syncthreads();
+        
+        // Reduce to find global max
+        for (int s = blockDim.x / 2; s >= 1; s /= 2) {
+            if (tid < s) {
+                shared_max[tid] = fmaxf(shared_max[tid], shared_max[tid + s]);
+            }
+            __syncthreads();
+        }
+        max_val = shared_max[0];
+        
+        // Compute exp and sum
+        float sum_exp = 0.0f;
+        for (int i = tid; i < dim; i += blockDim.x) {
+            float exp_val = expf(row[i] - max_val);
+            shared_sum[threadIdx.x] = exp_val;
+            sum_exp += exp_val;
+        }
+        shared_sum[threadIdx.x] = sum_exp;
+        __syncthreads();
+        
+        // Reduce to find global sum
+        for (int s = blockDim.x / 2; s >= 1; s /= 2) {
+            if (tid < s) {
+                shared_sum[tid] += shared_sum[tid + s];
+            }
+            __syncthreads();
+        }
+        float sum_total = shared_sum[0];
+        
+        // Compute log_softmax
+        float log_sum = logf(sum_total);
+        for (int i = tid; i < dim; i += blockDim.x) {
+            out_row[i] = row[i] - max_val - log_sum;
+        }
+    }
+}
+
+torch::Tensor log_softmax_cuda(torch::Tensor x, int dim) {
+    auto batch_size = x.size(0);
+    auto dim_size = x.size(1);
+    auto out = torch::zeros_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = batch_size;
+    const size_t shared_mem_size = 2 * block_size * sizeof(float);
+    
+    log_softmax_kernel<<<num_blocks, block_size, shared_mem_size>>>(
+        x.data_ptr<float>(), out.data_ptr<float>(), batch_size, dim_size);
+    
+    return out;
+}
+"""
+
+log_softmax_cpp_source = "torch::Tensor log_softmax_cuda(torch::Tensor x, int dim);"
+
+log_softmax = load_inline(
+    name="log_softmax",
+    cpp_sources=log_softmax_cpp_source,
+    cuda_sources=log_softmax_source,
+    functions=["log_softmax_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs a LogSoftmax activation using custom CUDA operators.
+    """
+    def __init__(self, dim: int = 1):
+        super(ModelNew, self).__init__()
+        self.dim = dim
+        self.log_softmax = log_softmax
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies LogSoftmax activation to the input tensor using custom CUDA kernel.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, dim).
+
+        Returns:
+            torch.Tensor: Output tensor with LogSoftmax applied, same shape as input.
+        """
+        return self.log_softmax.log_softmax_cuda(x, self.dim)

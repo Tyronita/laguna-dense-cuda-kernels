@@ -1,0 +1,9 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "Error building extension 'min_reduction'",
+  "problem_id": 53
+}
