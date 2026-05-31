@@ -22,9 +22,9 @@ A **~3.0 B fully-dense** model that generates **CUDA / Triton GPU kernels** from
 |---|---|
 | **Teacher** | `poolside/Laguna-XS.2` — 33 B total / 3 B active MoE (256 experts top-8 + shared) |
 | **Student** | **~3.0 B dense** (1 SwiGLU FFN per layer, K=8 width) — 5.99 GB bf16 |
-| **Method** | DO-ACP warm-start → teacher-forced reconstruction (kernel mix) → CUDA SFT → [RFT next] |
+| **Method** | DO-ACP warm-start → teacher-forced reconstruction (kernel mix) → CUDA SFT → [GRPO next] |
 | **vs teacher** | **11× fewer params, 12× less VRAM, +26 % faster decode** (32.1 vs 25.4 tok/s) |
-| **Status** | SFT done; emits correct CUDA on simple ops (ReLU/Tanh); RFT next |
+| **Status** | SFT done; emits correct CUDA on simple ops (ReLU/Tanh); GRPO next |
 
 ## Pipeline / lineage
 ```
@@ -33,7 +33,7 @@ poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
    │ Stage 0  DO-ACP warm-start (Gram log-det select 8 experts → concat)
    │ Stage 1  teacher-forced reconstruction on a KERNEL mixture  → "V2" checkpoint
    │ Stage 2  SFT on SakanaAI CUDA                                → THIS MODEL
-   ▼ Stage 3  RFT / GRPO (verifiable reward)                      → [next]
+   ▼ Stage 3  GRPO/RLVR (verifiable reward)                      → [next]
 ```
 
 ## Models (Hugging Face)
@@ -97,7 +97,7 @@ Hidden 2048 · 40 layers · 262 k ctx · 100 352 vocab · SiLU/SwiGLU.
 | Dataset | `SakanaAI/AI-CUDA-Engineer-Archive` (~30,615 rows, CC-BY-4.0) |
 | Fields | `PyTorch_Code_Module` (prompt) → `CUDA_Code` (target), filtered `Correct==True` |
 | Format | chat: `system + user(PyTorch ```python```) → assistant(```cpp CUDA```)`, prompt masked |
-| Not used | `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy` → reserved for the RFT reward |
+| Not used | `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy` → reserved for the GRPO reward |
 
 ---
 
@@ -182,7 +182,7 @@ Reliable on simple elementwise ops; consistent across **three independent harnes
 
 **Read:** ReLU & Tanh land ~70–75 % correct at pass@k (three runs agree → trustworthy). Harder ops
 (Sigmoid/GeLU) consistently fail — the model botches **float4-vectorization casts**
-(`float4* v = float4* x;` instead of `reinterpret_cast<float4*>(x)`) → the RFT **compile reward** target.
+(`float4* v = float4* x;` instead of `reinterpret_cast<float4*>(x)`) → the GRPO **compile reward** target.
 No single elementwise op beats eager (memory-bandwidth-bound; ReLU 0.93×) — speedups need fusion (L2).
 
 ### What's in KernelBench (the benchmark)
@@ -205,11 +205,11 @@ order-dependent, contaminated results. **Compile + run each kernel in its own su
 ## 9 · Failure taxonomy (from generated CUDA)
 | Category | Example | Fix |
 |---|---|---|
-| Wrong math/formula | GeLU / Sigmoid / Softmax | RFT correctness reward |
-| Deprecated API | `input.type()` vs `.scalar_type()` | prompt hint / RFT |
-| Inverted bounds/mask | `if (idx<size) return;` | RFT |
+| Wrong math/formula | GeLU / Sigmoid / Softmax | GRPO correctness reward |
+| Deprecated API | `input.type()` vs `.scalar_type()` | prompt hint / GRPO |
+| Inverted bounds/mask | `if (idx<size) return;` | GRPO |
 | Truncation | Softmax cut off | raise `max_new_tokens` |
-| Const-reassign / syntax | grid-stride `const int idx` | RFT compile reward |
+| Const-reassign / syntax | grid-stride `const int idx` | GRPO compile reward |
 
 ---
 
@@ -231,7 +231,7 @@ the [cm2435 research repo](https://github.com/cm2435/laguna-xs2-expert-coactivat
 |---|---|---|
 | `scripts/002_sft_general.py` · `scripts/002_sft_cuda.py` | SFT (general / Sakana CUDA) | `routed_dense + lm_head + norms` |
 | `scripts/003_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO; **isolated-parallel reward**) | `routed_dense + lm_head` |
-| `scripts/003_rft_offline.py` | offline RFT on Sakana traces | `routed_dense + lm_head` |
+| `scripts/003_grpo_offline.py` | offline GRPO on Sakana traces | `routed_dense + lm_head` |
 | `scripts/004_dpo.py` | DPO (correct+fast ≻ incorrect/slow) | `routed_dense + lm_head` |
 | `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + **`reward_for_text_isolated`** (subprocess) | — |
 
@@ -244,7 +244,7 @@ the [cm2435 research repo](https://github.com/cm2435/laguna-xs2-expert-coactivat
 
 **Docs** · [`TRAINING_PROVENANCE`](docs/TRAINING_PROVENANCE.md) (per-stage trainable params) · [`INVESTIGATION_GENERAL_METHOD`](docs/INVESTIGATION_GENERAL_METHOD.md) (random vs lift-and-shift, confirmed) · [`REPRODUCE`](docs/REPRODUCE.md) (GRPO/DPO deep guides) · [`PROVENANCE`](docs/PROVENANCE.md) · [`GRAPHS`](docs/GRAPHS.md) · [`ABLATIONS`](docs/ABLATIONS.md) · **[consolidation/PR plan →](docs/PR_PLAN.md)**
 
-## 11 · Next — RFT (GRPO/RLVR)
+## 11 · Next — GRPO (GRPO/RLVR)
 Sample G kernels/prompt → reward = **compile + correct + speedup** (via `robust-kbench`) → Dr.GRPO
 advantage + DAPO dynamic sampling + KL-to-SFT anchor → optimize **KernelBench `fast_1`** → NVFP4 +
 vLLM serve as a `generate_kernel` tool.

@@ -209,5 +209,5 @@ model; trainable `routed_dense + lm_head`.
   `densify_layer.py`, `reconstruction.py`, `dense_checkpoint/*`, `000_build_dense_placeholder.py`,
   `001_train_dense_reconstruction.py`, `002_sft_general.py`.
 - **Already in this repo:** `002_sft_cuda.py`, `003_grpo.py`, `004_dpo.py`,
-  `003_rft_offline.py`, `src/densify/kernel_reward.py`, eval harnesses.
+  `003_grpo_offline.py`, `src/densify/kernel_reward.py`, eval harnesses.
 - Papers: RADLADS arXiv:2505.03005 · KRAFTON MoE→Dense arXiv:2605.28207.

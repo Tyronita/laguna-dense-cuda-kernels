@@ -45,7 +45,7 @@ Tyronita is the CUDA-kernel slice.
 | Group | Paths |
 |---|---|
 | **Densify core** (stages 0–1) | `scripts/000_build_dense_placeholder.py`, `scripts/001_train_dense_reconstruction.py`, `src/densify/{densify_layer,reconstruction,dense_checkpoint/*}.py` |
-| **CUDA post-training** (stages 2–4) ⭐ | `scripts/002_sft_*.py`, `scripts/003_grpo.py`, `scripts/003_rft_offline.py`, `scripts/004_dpo.py`, `src/densify/kernel_reward.py` |
+| **CUDA post-training** (stages 2–4) ⭐ | `scripts/002_sft_*.py`, `scripts/003_grpo.py`, `scripts/003_grpo_offline.py`, `scripts/004_dpo.py`, `src/densify/kernel_reward.py` |
 | **CUDA eval & ablations** | `scripts/eval_worker.py`, `kernelbench_lite_eval.py`, `eval_10ops_isolated.py`, `head_to_head.py`, `ablate_*.py` |
 | **Agentic** (cm2435 only) | `src/densify/{swebench,coding_harness,rollout_sft,pool_backend,…}` |
 

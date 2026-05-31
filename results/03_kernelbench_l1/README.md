@@ -7,7 +7,7 @@ Full evaluation of post-training variants on [KernelBench](https://github.com/Sc
 | Model | Training | HuggingFace |
 |---|---|---|
 | **GRPO** | Dr.GRPO + DAPO dynamic sampling | `EvanOLeary/laguna-xs2-dense-k8-cuda-grpo` |
-| **RFT** | Rejection fine-tuning (offline) | `EvanOLeary/laguna-xs2-dense-k8-cuda-rft` |
+| **GRPO** | Rejection fine-tuning (offline) | `EvanOLeary/laguna-xs2-dense-k8-cuda-rft` |
 | **DPO** | Direct preference optimization | `EvanOLeary/laguna-xs2-dense-k8-cuda-dpo` |
 
 All models share the same base: `laguna-xs2-dense-k8-cuda-sft` (3.0B dense, from Laguna XS.2 MoE densification).
@@ -52,7 +52,7 @@ Those results show ReLU/Tanh at ~70% correct, while harder ops (Sigmoid/GeLU) fa
 
 | | Smoke Test (Section 7b) | KernelBench L1 (this eval) |
 |---|---|---|
-| **Model** | DPO | GRPO / RFT / DPO |
+| **Model** | DPO | GRPO / GRPO / DPO |
 | **Prompt style** | System prompt with API hints | One-shot example (standard KB format) |
 | **System prompt** | "Expert GPU kernel engineer. Use scalar_type(), AT_DISPATCH..." | Default model chat system |
 | **Sampling** | do_sample=True, temp=0.6, top_k=20, pass@3 | Greedy (temp=0), pass@1 |
@@ -69,7 +69,7 @@ results/kernelbench_l1/
 │   ├── problem_NNN_result.json   # Per-problem eval results
 │   ├── summary.json              # Aggregate metrics
 │   └── all_results.json          # All results in one file
-├── grpo-online/                           # RFT model results (same structure)
+├── grpo-online/                           # GRPO model results (same structure)
 ├── dpo/                           # DPO model results (same structure)
 └── comparison.json                # Side-by-side final comparison
 ```

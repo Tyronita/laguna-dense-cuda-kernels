@@ -1,4 +1,4 @@
-"""Verifiable shaped reward for CUDA-kernel RFT (RLVR).
+"""Verifiable shaped reward for CUDA-kernel GRPO (RLVR).
 
 Bakes the robust-kbench-style signal into a single scalar:
     parse → compile → numerically-correct vs eager → speedup vs eager.
@@ -118,7 +118,7 @@ def reward_for_text(text: str, ref_fn, shape=(4096, 4096), name="k") -> tuple[fl
 
 def reward_for_text_isolated(text: str, op: str, dsl: str = "CUDA", uniq: str = "k") -> tuple[float, dict]:
     """Verifiable reward via the eval_worker SUBPROCESS — a faulty kernel can't
-    corrupt the trainer's CUDA context (required for stable RFT). `op` must be a
+    corrupt the trainer's CUDA context (required for stable GRPO). `op` must be a
     key in eval_worker.REFS; `uniq` makes the compiled module name unique."""
     import os
     import sys

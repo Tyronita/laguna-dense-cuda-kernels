@@ -45,7 +45,7 @@ than the Python flavour). Loss = `mean_ℓ(MSE/mean(yℓ²) + 0.05·(1−cos))`,
 | **Reconstruction (kernel mix / V2)** | 2000 | ~8.2M | KernelBook 40 / OpenCodeInstruct 30 / SakanaAI CUDA 20 / Triton-traces 10 |
 | SFT (CUDA) | 400 | ~3.5M | SakanaAI/AI-CUDA-Engineer-Archive (correct only) |
 
-## 5. Reference benchmark — Sakana robust-kbench (the RFT reward harness)
+## 5. Reference benchmark — Sakana robust-kbench (the GRPO reward harness)
 ![sakana](figures/sakana_kbench_results.png)
 
 ---
@@ -59,7 +59,7 @@ than the Python flavour). Loss = `mean_ℓ(MSE/mean(yℓ²) + 0.05·(1−cos))`,
 | [590dbaf](https://gist.github.com/Tyronita/590dbaf1aa435b506f00547d57300e07) | pretraining phase (living reference) |
 | [a57542d](https://gist.github.com/Tyronita/a57542dd2b911fe8888a5a5d9a78de32) | kernel-mixture smoke wrap-up |
 | [e60099b](https://gist.github.com/Tyronita/e60099bc32c8fea63aeb3f09998319b3) | training data survey + mixture |
-| [a24df01](https://gist.github.com/Tyronita/a24df01db2e24062568e8ed23b46db37) | SFT + RFT plan |
+| [a24df01](https://gist.github.com/Tyronita/a24df01db2e24062568e8ed23b46db37) | SFT + GRPO plan |
 | [2926aec](https://gist.github.com/Tyronita/2926aec5cc13661726bb0000548196c8) | Python vs Kernel two-track plan |
 | [cd2c879](https://gist.github.com/Tyronita/cd2c8790712b384376d796198946c270) | full pipeline report |
 | [e635c13](https://gist.github.com/Tyronita/e635c132fcecef3e5c167f0970eea743) | robust kernel benchmarking notes |

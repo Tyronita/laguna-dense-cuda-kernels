@@ -45,14 +45,14 @@ rows first). Recovers chat behaviour + broad code generation after reconstructio
 logit-KD against the teacher via `--kd-dataset/--kd-weight/--kd-temperature`.
 - Defaults: seq 8192, lr 5e-5, max-steps 500; trainable adds `--train-norms --train-lm-head`.
 - Observed: clean documented Python recovered; HumanEval plateaus ~1/10 (logic, not syntax) →
-  motivates RFT/GRPO.
+  motivates GRPO/RLVR.
 
 ### SFT Mix B — CUDA kernels
 `scripts/002_sft_cuda.py` on **`SakanaAI/AI-CUDA-Engineer-Archive`**, splits `level_1,level_2`,
 **`Correct==True` only**, field map `PyTorch_Code_Module → CUDA_Code`, chat-formatted.
 - Defaults: seq 2048, lr 1e-5, grad-accum 8, max-steps 400; trainable = `routed_dense +
   lm_head + norms` (attention frozen).
-- Held out for the RFT reward: `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy`.
+- Held out for the GRPO reward: `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy`.
 
 ## Stage 5 — DPO preference pairs
 `scripts/004_dpo.py` mines the Sakana archive's evolutionary trajectory: per `Task_ID`,
