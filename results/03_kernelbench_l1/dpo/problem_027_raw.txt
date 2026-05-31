@@ -1,0 +1,178 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication
+__global__ void elementwise_mul_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx];
+    }
+}
+
+// Custom CUDA kernel for elementwise ReLU
+__global__ void elementwise_relu_kernel(const float* a, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] > 0.0f ? a[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with ReLU
+__global__ void elementwise_add_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx] > 0.0f ? a[idx] + b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise multiplication with ReLU
+__global__ void elementwise_mul_relu_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx] > 0.0f ? a[idx] * b[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA kernel for elementwise addition with ReLU
+__global__ void elementwise_add_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication with ReLU
+__global__ void elementwise_mul_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication
+__global__ void elementwise_mul_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise ReLU
+__global__ void elementwise_relu_cuda(torch::Tensor a) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition with ReLU
+__global__ void elementwise_add_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication with ReLU
+__global__ void elementwise_mul_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication
+__global__ void elementwise_mul_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise ReLU
+__global__ void elementwise_relu_cuda(torch::Tensor a) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition with ReLU
+__global__ void elementwise_add_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication with ReLU
+__global__ void elementwise_mul_relu_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication
+__global__ void elementwise_mul_cuda(torch::Tensor a, torch::Tensor b

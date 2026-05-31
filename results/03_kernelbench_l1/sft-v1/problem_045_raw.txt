@@ -1,0 +1,78 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for 2D average pooling with loop unrolling
+template <typename scalar_t>
+__global__ void avg_pool2d_kernel_unrolled(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t kernel_size,
+    const int64_t height,
+    const int64_t width,
+    const int64_t batch_size,
+    const int64_t channels) {
+    
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * channels * (height - 1) * (width - 1);
+    
+    if (idx < total_elements) {
+        const int c = idx / (height * width);
+        const int rem = idx % (height * width);
+        const int h = rem / width;
+        const int w = rem % width;
+        
+        const int in_h = h + padding;
+        const int in_w = w + padding;
+        const int out_h = in_h / stride;
+        const int out_w = in_w / stride;
+        
+        scalar_t sum = 0;
+        #pragma unroll
+        for (int k = 0; k < kernel_size; ++k) {
+            const int in_k = (k - 1) * stride + in_h;
+            const int in_kw = (k - 1) * stride + in_w;
+            if (in_k < height && in_kw < width) {
+                const int in_idx = ((in_k - 1) * stride + in_k) * width + in_kw;
+                sum += input[in_idx];
+            }
+        }
+        output[idx] = sum / kernel_size;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor avg_pool2d_cuda(torch::Tensor input, int64_t stride, int64_t padding, int64_t kernel_size) {
+    auto output = torch::empty({input.size(0), input.size(1), input.size(2) - 1, input.size(3) - 1}, input.options());
+    
+    const int threads = 256;
+    const int total_elements = input.numel() * (input.size(2) - 1) * (input.size(3) - 1);
+    const int blocks = (total_elements + threads - 1) / threads;
+    
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "avg_pool2d_kernel_unrolled", ([&] {
+        avg_pool2d_kernel_unrolled<scalar_t><<<blocks, threads>>>(
+            input.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            kernel_size,
+            input.size(2),
+            input.size(3),
+            input.size(0),
+            input.size(1)
+        );
+    }));
+    
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &avg_pool2d_cuda, "2D average pooling with loop unrolling (CUDA)");
+}
+```
+</assistant>

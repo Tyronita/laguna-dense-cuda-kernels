@@ -1,0 +1,34 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void argmax_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        int current_dim = dim - 1;
+        float max_val = -FLT_MAX;
+        for (int i = 0; i < current_dim; i++) {
+            float val = input[idx * current_dim + i];
+            if (val > max_val) {
+                max_val = val;
+            }
+        }
+        output[idx] = max_val;
+    }
+}
+
+torch::Tensor argmax_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    argmax_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), output.data_ptr<float>(), size, dim);
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &argmax_cuda, "Argmax over a specified dimension (CUDA)");
+}
+```
+</assistant>

@@ -1,0 +1,50 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) { out[idx] = a[idx] + b[idx];
+    }
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+torch::Tensor layer_norm_cuda(torch::Tensor x, weight, bias) {
+    const int block_size = 256;
+    const int num_blocks = (x.numel() + block_size - 1) / block_size;
+    
+    // Compute mean and variance
+    float mean = 0.0f;
+    float var = 0.0f;
+    for (int i = 0; i < x.numel(); i++) {
+        mean += x[i].cast<float>();
+        var += x[i].cast<float>();
+    }
+    
+    // Normalize
+    float normalized = (x - mean) / sqrtf(var + 1e-5f);
+    
+    // Apply weight and bias
+    x = (x * weight.cast<float>() + bias.cast<float>()) * normalized;
+    
+    return x;
+}
+
+torch::Tensor forward(torch::Tensor x, weight, bias) {
+    return layer_norm_cuda(x, weight, bias);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "Custom LayerNorm with CUDA");
+}
+```
+</assistant>

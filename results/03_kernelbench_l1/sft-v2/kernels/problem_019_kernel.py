@@ -1,0 +1,57 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdexcept>
+
+// Custom CUDA kernel for ReLU activation using vectorized loads/stores
+__global__ void relu_vectorized_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+    for (int i = idx; i < size; i += stride) {
+        float x = input[i];
+        output[i] = x > 0.0f ? x : 0.0f;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(torch::Tensor x) {
+    TORCH_CHECK(x.is_cuda(), "Input must be a CUDA tensor");
+    TORCH_CHECK(x.dtype() == torch::kFloat32, "Input must be float32");
+
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+
+    relu_vectorized_kernel<<<blocks, threads>>>(x.data_ptr<float>(), output.data_ptr<float>(), size);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorString(err));
+    }
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(torch::Tensor x);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

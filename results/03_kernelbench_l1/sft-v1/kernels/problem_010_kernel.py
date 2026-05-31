@@ -1,0 +1,113 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for matrix multiplication with shared memory tiling
+template <typename scalar_t>
+__global__ void matmul_shared_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ A,
+    const scalar_t* __restrict__ B,
+    const int N,
+    const int M,
+    const int K,
+    const int L) {
+    
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    const int tx = threadIdx.x;
+    const int ty = threadIdx.y;
+    
+    scalar_t sum = 0;
+    
+    // Shared memory tiles
+    __shared__ scalar_t As[16][16];
+    __shared__ scalar_t Bs[16][16];
+    
+    // Loop over tiles
+    for (int t = 0; t < (K + 15) / 16; ++t) {
+        // Collaborative loading of tiles into shared memory
+        if (row < N && (t * 16 + ty) < K) {
+            As[ty][tx] = A[row * M + t * 16 + ty];
+        } else {
+            As[ty][tx] = 0;
+        }
+        
+        if (col < L && (t * 16 + tx) < K) {
+            Bs[tx][ty] = B[(t * 16 + tx) * L + col];
+        } else {
+            Bs[tx][ty] = 0;
+        }
+        
+        __syncthreads();
+        
+        // Compute partial dot product for this tile
+        if (row < N && col < L) {
+            for (int k = 0; k < 16; ++k) {
+                sum += As[k][tx] * Bs[tx][ty];
+            }
+        }
+        
+        __syncthreads();
+    }
+    
+    if (row < N && col < L) {
+        output[row * M + col] = sum;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor matmul_cuda(torch::Tensor A, torch::Tensor B) {
+    const int N = A.size(0);
+    const int M = A.size(1);
+    const int K = A.size(2);
+    const int L = B.size(0);
+
+    auto options = torch::TensorOptions()
+        .dtype(A.dtype())
+        .device(A.device());
+    auto output = torch::empty({N, M, L}, options);
+
+    // Use 16x16 threads per block
+    const int threads = 16;
+    dim3 threads(threads, threads);
+    dim3 blocks(
+        (N + threads - 1) / threads,
+        (M + threads - 1) / threads,
+        (L + threads - 1) / threads
+    );
+
+    AT_DISPATCH_FLOATING_TYPES(A.type(), "matmul_shared_kernel", ([&] {
+        matmul_shared_kernel<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            A.data_ptr<scalar_t>(),
+            B.data_ptr<scalar_t>(),
+            N, M, K, L
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor matmul_cuda(torch::Tensor A, torch::Tensor B);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['matmul_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, A, B):
+        return custom_ops.matmul_cuda(A, B)

@@ -1,0 +1,121 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for mean reduction along a specific dimension
+__global__ void mean_reduce_kernel(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    const int64_t size,
+    const int64_t dim) {
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float sum = 0.0f;
+        for (int d = 0; d < dim; ++d) {
+            sum += input[idx * dim + d];
+        }
+        output[idx] = sum / dim;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor mean_reduce_cuda(torch::Tensor input, int64_t dim) {
+    auto size = input.numel();
+    auto output = torch::empty_like(input);
+    
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+    
+    mean_reduce_kernel<<<blocks, threads>>>(
+        input.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size,
+        dim
+    );
+    
+    return output;
+}
+
+// PyTorch module wrapper
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+    
+    elementwise_add_kernel<<<blocks, threads>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+// PyTorch module
+torch::Module elementwise_add_module(torch::Module):
+    super().__init__()
+    self.elementwise_add = elementwise_add_cuda
+
+// PyTorch module for mean reduction
+torch::Module mean_reduce_module(torch::Module):
+    super().__init__()
+    self.dim = dim
+
+    def forward(torch::Tensor input, int64_t dim) {
+        return mean_reduce_cuda(input, dim)
+    }
+
+// PyTorch module combining elementwise addition and mean reduction
+torch::Module combined_operations(torch::Module):
+    super().__init__()
+    self.elementwise_add = elementwise_add_module
+    self.mean_reduce = mean_reduce_module
+
+    def forward(torch::Tensor input, int64_t dim) {
+        return self.elementwise_add(input) + self.mean_reduce(input, dim)
+    }
+
+// PyTorch module for mean reduction only
+torch::Module mean_reduce_only(torch::Module):
+    super().__init__()
+    self.dim = dim
+
+    def forward(torch::Tensor input, int64_t dim) {
+        return mean_reduce_cuda(input, dim)
+    }
+
+// PyTorch module for elementwise addition only
+torch::Module elementwise_add_only(torch::Module):
+    super().__init__()
+    self.elementwise_add = elementwise_add_cuda
+
+    def forward(torch::Tensor input, int64_t dim) {
+        return self.elementwise_add(input)
+    }"""
+
+cpp_source = """torch::Tensor mean_reduce_cuda(torch::Tensor input, int64_t dim);\ntorch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['mean_reduce_cuda', 'elementwise_add_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.mean_reduce_cuda(x)

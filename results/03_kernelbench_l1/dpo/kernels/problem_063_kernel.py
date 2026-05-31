@@ -1,0 +1,89 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with optimized block size
+__global__ void conv2d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int height,
+    int width,
+    int out_channels,
+    int kernel_size,
+    int stride,
+    int padding) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * out_channels * (height - 1) * (width - 1);
+    if (idx < total) {
+        int w_out = width - 1;
+        int h_out = height - 1;
+        int c_out = idx % out_channels;
+        int b = (idx / out_channels) % batch_size;
+        int h_in = (h_out - 2 * padding) / stride + 1;
+        int w_in = (w_out - 2 * padding) / stride + 1;
+        float sum = bias[c_out];
+        
+        for (int c_in = 0; c_in < in_channels; c_in++) {
+            for (int kh = 0; kh < kernel_size; kh++) {
+                for (int kw = 0; kw < kernel_size; kw++) {
+                    int h_in_idx = h_in + kh - padding;
+                    int w_in_idx = w_in + kw - padding;
+                    if (h_in_idx >= 0 && h_in_idx < height && w_in_idx >= 0 && w_in_idx < width) {
+                        int input_idx = b * (in_channels * height * width) + c_in * (height * width) + h_in_idx * width + w_in_idx;
+                        int weight_idx = c_in * (out_channels * kernel_size * kernel_size) + c_out * (kernel_size * kernel_size) + kh * kernel_size + kw;
+                        sum += input[input_idx] * weight[weight_idx];
+                    }
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor conv2d_cuda(torch::Tensor x, torch::Tensor weight, torch::Tensor bias) {
+    auto batch_size = x.size(0);
+    auto in_channels = x.size(1);
+    auto height = x.size(2);
+    auto width = x.size(3);
+    auto out_channels = weight.size(0);
+    auto kernel_size = weight.size(2);
+    auto stride = x.size(2) / kernel_size;
+    auto padding = x.size(3) / kernel_size;
+
+    auto output = torch::empty({batch_size, out_channels, height - 1, width - 1}, x.options());
+    const int block_size = 256;
+    const int num_blocks = (batch_size * out_channels * (height - 1) * (width - 1) + block_size - 1) / block_size;
+    conv2d_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), weight.data_ptr<float>(), bias.data_ptr<float>(), output.data_ptr<float>(), batch_size, in_channels, height, width, out_channels, kernel_size, stride, padding);
+    return output;
+}
+
+torch::Tensor forward(torch::Tensor x, torch::Tensor weight, torch::Tensor bias) {
+    return conv2d_cuda(x, weight, bias);
+}"""
+
+cpp_source = """torch::Tensor conv2d_cuda(torch::Tensor x, torch::Tensor weight, torch::Tensor bias);\ntorch::Tensor forward(torch::Tensor x, torch::Tensor weight, torch::Tensor bias);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['conv2d_cuda', 'forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.conv2d_cuda(x)

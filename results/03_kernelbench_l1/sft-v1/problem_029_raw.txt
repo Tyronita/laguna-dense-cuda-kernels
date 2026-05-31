@@ -1,0 +1,44 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for elementwise addition with loop unrolling
+template <typename scalar_t>
+__global__ void elementwise_add_kernel_unrolled(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    int64_t size) {
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        output[idx] = input[idx] + weight[idx];
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor elementwise_add_cuda(torch::Tensor input, torch::Tensor weight) {
+    auto output = torch::empty_like(input);
+    const int threads = 256;
+    const int blocks = (input.numel() + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "elementwise_add_kernel_unrolled", ([&] {
+        elementwise_add_kernel_unrolled<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            input.numel()
+        );
+    }));
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &elementwise_add_cuda, "Elementwise addition with loop unrolling (CUDA)");
+}
+```
+</assistant>

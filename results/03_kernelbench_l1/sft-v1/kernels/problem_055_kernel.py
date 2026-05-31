@@ -1,0 +1,130 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for 2D convolution with asymmetric input
+// This kernel uses grid-stride loops to handle all output elements
+// and ensures that the input is not padded (we assume padding=0)
+
+template <typename scalar_t>
+__global__ void conv2d_kernel_stride(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    const scalar_t* __restrict__ bias,
+    const int batch_size,
+    const int in_channels,
+    const int in_h,
+    const int in_w,
+    const int out_channels,
+    const int kernel_h,
+    const int kernel_w,
+    const int stride,
+    const int padding) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * out_channels * in_h * in_w;
+    for (; idx < total_elements; idx += gridDim.x * blockDim.x) {
+        // Compute the output coordinates
+        const int w = idx % in_w;
+        const int h = (idx / in_w) % in_h;
+        const int oc = (idx / (in_w * in_h)) % out_channels;
+        const int b = idx / (in_w * in_h);
+
+        scalar_t sum = 0;
+        // Loop over input channels
+        for (int ic = 0; ic < in_channels; ++ic) {
+            // Loop over kernel height and width
+            for (int kh = 0; kh < kernel_h; ++kh) {
+                for (int kw = 0; kw < kernel_w; ++kw) {
+                    // Compute input position
+                    const int in_h = h + padding - kh;
+                    const int in_w = w + padding - kw;
+                    if (in_h < 0 || in_w < 0 || in_h < in_h || in_w < in_w) {
+                        // Use stride to avoid overlapping memory accesses
+                        const int input_idx = (((b * in_channels + ic) * in_h + in_h) * in_w + in_w) * stride;
+                        const int weight_idx = (((ic * out_channels + oc) * kernel_h + kh) * kernel_w + kw);
+                        sum += input[input_idx] * weight[weight_idx];
+                    }
+                }
+            }
+        }
+        // Add bias
+        output[idx] = sum + bias[oc];
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    const int batch_size = input.size(0);
+    const int in_channels = input.size(1);
+    const int in_h = input.size(2);
+    const int in_w = input.size(3);
+
+    const int out_channels = weight.size(0);
+    const int kernel_h = weight.size(1);
+    const int kernel_w = weight.size(2);
+
+    auto options = torch::TensorOptions()
+        .dtype(input.dtype())
+        .device(input.device());
+    auto output = torch::empty({batch_size, out_channels, in_h, in_w}, options);
+
+    const int threads = 256;
+    const int total_elements = batch_size * out_channels * in_h * in_w;
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "conv2d_kernel_stride", ([&] {
+        conv2d_kernel_stride<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            batch_size,
+            in_channels,
+            in_h,
+            in_w,
+            out_channels,
+            kernel_h,
+            kernel_w,
+            stride,
+            padding
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    torch::Tensor weight,
+    torch::Tensor bias);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward_cuda(x)

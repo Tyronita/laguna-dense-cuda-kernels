@@ -1,0 +1,75 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void warpReduceKernel(const float* input, float* output, int size, int dim) {
+    extern __shared__ float sharedMem[];
+    int tid = threadIdx.x;
+    int bid = blockIdx.x;
+    int lane = tid % 32;
+    int warp = tid / 32;
+    
+    // Each warp processes one element in the reduction dimension
+    for (int i = warp; i < dim; i += blockDim.x / 32) {
+        float sum = 0.0f;
+        // Each thread in the warp processes multiple elements
+        for (int j = lane; j < blockDim.x; j += 32) {
+            int idx = bid * dim + i * blockDim.x + j;
+            if (idx < size) {
+                sum += input[idx];
+            }
+        }
+        
+        // Warp-level reduction using shuffle operations
+        for (int offset = 16; offset > 0; offset /= 2) {
+            sum += __shfl_down_sync(0xffffffff, sum, offset);
+        }
+        
+        // Write the result of the warp to shared memory
+        if (lane == 0) {
+            sharedMem[warp] = sum;
+        }
+        __syncthreads();
+        
+        // First warp reduces the warp results
+        if (warp == 0) {
+            if (lane < blockDim.x / 32) {
+                sum = sharedMem[lane];
+            }
+            for (int offset = 16; offset > 0; offset /= 2) {
+                sum += __shfl_down_sync(0xffffffff, sum, offset);
+            }
+            if (lane == 0) {
+                output[bid] = sum;
+            }
+        }
+    }
+}
+
+torch::Tensor sum_reduce_cuda(torch::Tensor x, int dim) {
+    TORCH_CHECK(x.dim() == 3, "Input must be 3D");
+    TORCH_CHECK(x.size(1) == dim, "Dimension must match");
+    
+    int batch_size = x.size(0);
+    int dim1 = x.size(2);
+    int size = batch_size * dim1;
+    
+    auto output = torch::zeros({batch_size}, x.options());
+    
+    const int threads = 256;
+    const int warps = threads / 32;
+    const int blocks = batch_size;
+    
+    warpReduceKernel<<<blocks, threads, warps * sizeof(float)>>>(
+        x.data_ptr<float>(), output.data_ptr<float>(), size, dim
+    );
+    
+    return output.view({batch_size, 1, dim1});
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &sum_reduce_cuda, "Sum reduction over specified dimension (CUDA)");
+}
+```
+</assistant>

@@ -1,0 +1,81 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for elementwise addition
+__global__ void elementwise_add_kernel(const float* __restrict__ a,
+                                        const float* __restrict__ b,
+                                        float* __restrict__ out,
+                                        int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// PyTorch wrapper function for elementwise addition
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    return out;
+}
+
+// PyTorch wrapper function for cumulative product along a specified dimension
+torch::Tensor cumprod_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto out = torch::empty_like(x);
+    
+    // CUDA kernel for cumulative product along the specified dimension
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+    
+    // Use a single kernel to compute the cumulative product along the specified dimension
+    // This kernel computes the sum of elements along the given dimension
+    // and returns the result as a scalar tensor
+    float sum = 0.0f;
+    for (int idx = blockIdx.x; idx < blocks; ++idx) {
+        int global_idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (global_idx < size) {
+            sum += x[global_idx];
+        }
+    }
+    
+    // Convert the result to a scalar tensor
+    return torch::scalar_sum(sum);
+}
+
+// PyTorch wrapper function for forward
+torch::Tensor forward(torch::Tensor x, int dim) {
+    return cumprod_cuda(x, dim);
+}"""
+
+cpp_source = """torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);\ntorch::Tensor cumprod_cuda(torch::Tensor x, int dim);\ntorch::Tensor forward(torch::Tensor x, int dim);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['elementwise_add_cuda', 'cumprod_cuda', 'forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.elementwise_add_cuda(x)

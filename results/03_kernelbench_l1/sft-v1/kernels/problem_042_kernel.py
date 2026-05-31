@@ -1,0 +1,105 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for 2D Max Pooling with stride, padding, dilation
+// Each thread computes one output element in the pooled tensor
+template <typename scalar_t>
+__global__ void maxpool2d_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t dilation,
+    const int64_t batch_size,
+    const int64_t channels,
+    const int64_t height,
+    const int64_t width,
+    const int64_t kernel_size) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = batch_size * channels * (height / stride) * (width / stride);
+    if (idx >= total_elements) return;
+
+    const int c = idx / (height * width);
+    const int rem = idx % (height * width);
+    const int h = rem / width;
+    const int w = rem % width;
+
+    const int out_h = h - 1 + padding;
+    const int out_w = w - 1 + padding;
+
+    scalar_t max_val = 0;
+    for (int k = 0; k < kernel_size; ++k) {
+        const int in_h = out_h - k + dilation;
+        const int in_w = out_w - k + dilation;
+        if (in_h < height && in_w < width) {
+            const int in_idx = ((batch_size * channels + c) * height + in_h) * width + in_w;
+            max_val = input[in_idx];
+        }
+    }
+    output[idx] = max_val;
+}
+
+// PyTorch wrapper function
+torch::Tensor maxpool2d_cuda(torch::Tensor input,
+                             int64_t stride,
+                             int64_t padding,
+                             int64_t dilation) {
+    const int64_t batch_size = input.size(0);
+    const int64_t channels = input.size(1);
+    const int64_t height = input.size(2);
+    const int64_t width = input.size(3);
+
+    const int64_t pooled_height = (height - 1) * stride + padding;
+    const int64_t pooled_width = (width - 1) * stride + padding;
+
+    auto output = torch::empty({batch_size, channels, pooled_height, pooled_width}, input.options());
+
+    const int threads = 256;
+    const int total_elements = batch_size * channels * pooled_height * pooled_width;
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "maxpool2d_kernel", ([&] {
+        maxpool2d_kernel<scalar_t><<<blocks, threads>>>(
+            input.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            dilation,
+            batch_size,
+            channels,
+            height,
+            width,
+            kernel_size
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor maxpool2d_cuda(torch::Tensor input,
+                             int64_t stride,
+                             int64_t padding,
+                             int64_t dilation);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['maxpool2d_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.maxpool2d_cuda(x)

@@ -1,0 +1,100 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for transposed 1D convolution with stride, padding, dilation
+// This kernel uses grid-stride loops to handle larger workloads efficiently.
+// It computes the output for each (n, c) slice by iterating over the (n, c) dimension.
+// Each thread computes one output element in the transposed convolution.
+
+template <typename scalar_t>
+__global__ void transposed_conv1d_kernel_stride(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    const scalar_t* __restrict__ bias,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t dilation,
+    const int64_t in_channels,
+    const int64_t in_length,
+    const int64_t out_channels,
+    const int64_t kernel_size) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = in_channels * out_channels * in_length;
+    if (idx >= total_elements) return;
+
+    // Decompose the index into a 3D coordinate
+    int c = idx % out_channels;
+    int n = (idx / out_channels);
+    int l = idx % in_length;
+
+    // Determine the output position for this (n, c) slice
+    int out_l = (l - padding) * stride + (l - dilation) * kernel_size;
+
+    scalar_t sum = 0;
+    for (int ic = 0; ic < in_channels; ++ic) {
+        int in_l = (l - padding) * stride + (l - dilation) * kernel_size;
+        if (in_l < in_length) {
+            int input_idx = ((n * in_channels + ic) * in_length + in_l);
+            int weight_idx = ((ic * out_channels + c) * kernel_size + in_l);
+            sum += input[input_idx] * weight[weight_idx];
+        }
+    }
+    if (bias != 0) {
+        sum += bias[c];
+    }
+    int output_idx = ((n * out_channels + c) * in_length + out_l);
+    output[output_idx] = sum;
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    auto in_channels = input.size(0);
+    auto in_length = input.size(2);
+    auto out_channels = weight.size(0);
+    auto kernel_size = weight.size(1);
+
+    auto options = torch::TensorOptions()
+        .dtype(input.dtype())
+        .device(input.device());
+    auto output = torch::empty({1, out_channels, in_length}, options);
+
+    const int threads = 256;
+    const int total_elements = in_channels * out_channels * in_length;
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "transposed_conv1d_kernel_stride", ([&] {
+        transposed_conv1d_kernel_stride<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            dilation,
+            in_channels,
+            in_length,
+            out_channels,
+            kernel_size
+        );
+    }));
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward_cuda, "Transposed 1D Convolution with stride, padding, dilation (CUDA)");
+}
+```
+</assistant>

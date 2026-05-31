@@ -1,0 +1,105 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D max pooling with loop unrolling
+__global__ void maxpool3d_unroll_kernel(
+    const float* input,
+    float* output,
+    int batch_size,
+    int channels,
+    int dim1,
+    int dim2,
+    int dim3,
+    int kernel_size,
+    int stride,
+    int padding,
+    int dilation) {
+
+    // Calculate output dimensions
+    int out_dim1 = (dim1 - 1) * stride - 1;
+    int out_dim2 = (dim2 - 1) * stride - 1;
+    int out_dim3 = (dim3 - 1) * stride - 1;
+
+    // Calculate output indices
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * channels * out_dim1 * out_dim2 * out_dim3;
+    if (idx < total) {
+        // Decode output index
+        int c = (idx / (out_dim1 * out_dim2 * out_dim3)) % channels;
+        int b = (idx / (out_dim1 * out_dim2 * out_dim3)) / channels;
+        int d1 = idx % (out_dim1 * out_dim2 * out_dim3);
+        int d2 = d1 / (out_dim1 * out_dim2);
+        int d3 = d1 % (out_dim1 * out_dim2);
+
+        float max_val = -FLT_MAX;
+        // Loop over input window with unrolling
+        for (int i = 0; i < kernel_size; i++) {
+            for (int j = 0; j < kernel_size; j++) {
+                int in_d1 = d1 * stride + i - padding;
+                int in_d2 = d2 * stride + j - padding;
+                int in_d3 = d3 * stride + i - padding;
+                
+                if (in_d1 >= 0 && in_d1 < dim1 && in_d2 >= 0 && in_d2 < dim2 && in_d3 >= 0 && in_d3 < dim3) {
+                    int input_idx = b * (channels * dim1 * dim2 * dim3) + c * (dim1 * dim2 * dim3) + in_d1 * dim2 + in_d2 * dim3 + in_d3;
+                    float val = input[input_idx];
+                    max_val = max(max_val, val);
+                }
+            }
+        }
+        output[idx] = max_val;
+    }
+}
+
+// Forward function
+torch::Tensor maxpool3d_cuda(
+    torch::Tensor x,
+    int64_t kernel_size,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation) {
+
+    TORCH_CHECK(x.is_cuda(), "Input must be a CUDA tensor");
+    TORCH_CHECK(x.dim() == 5, "Input must be 5D");
+    TORCH_CHECK(kernel_size % 2 == 0, "Kernel size must be divisible by 2");
+
+    int batch_size = x.size(0);
+    int channels = x.size(1);
+    int dim1 = x.size(2);
+    int dim2 = x.size(3);
+    int dim3 = x.size(4);
+
+    // Calculate output dimensions
+    int out_dim1 = (dim1 - 1) * stride - 1;
+    int out_dim2 = (dim2 - 1) * stride - 1;
+    int out_dim3 = (dim3 - 1) * stride - 1;
+
+    auto output = torch::empty({batch_size, channels, out_dim1, out_dim2, out_dim3}, x.options());
+
+    int total = batch_size * channels * out_dim1 * out_dim2 * out_dim3;
+    int threads = 256;
+    int blocks = (total + threads - 1) / threads;
+
+    maxpool3d_unroll_kernel<<<blocks, threads>>>(
+        x.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        channels,
+        dim1,
+        dim2,
+        dim3,
+        kernel_size,
+        stride,
+        padding,
+        dilation
+    );
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &maxpool3d_cuda, "3D max pooling with loop unrolling (CUDA)");
+}
+```
+</assistant>

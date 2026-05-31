@@ -1,0 +1,10 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "Error building extension 'custom_ops': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=custom_ops -DTORCH_API_INCLUDE_EXTENSION_H -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include/torch/csrc/api/include -isystem /usr/local/cuda-12.6/include -isystem /usr/include/python3.10 -fPIC -std=c++17 -O3 -c /data/.torch_extensions/custom_ops/main.cpp -o main.o \n[2/3] /usr/local/cuda-12.6/bin/nvcc -MD -MF cuda.cud",
+  "problem_id": 81,
+  "static_check": "pass"
+}
