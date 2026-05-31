@@ -107,7 +107,7 @@ distribution, via `KL(student ‖ teacher)`. It operates on the *final vocab log
 **What we actually did is *activation* / *feature* reconstruction, not logit-KD.** Stage 1 matches
 the teacher's **per-layer MLP-block outputs** with `MSE + 0.05·cos` (FitNets-style feature hints) —
 *not* the output logits. **Logit-KD was documented as a planned Stage 2 but was *not run*:**
-`02_sft_*.py` exposes an optional `--kd-weight` that **defaults to 0** (off), and no logit-KD run
+`002_sft_*.py` exposes an optional `--kd-weight` that **defaults to 0** (off), and no logit-KD run
 exists. So the honest pipeline is: **activation-reconstruction → SFT → GRPO → DPO**. Logit-KD
 remains a future lever (it's the one RADLADS calls "step 2" and that Hinton-KD describes).
 
