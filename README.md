@@ -56,11 +56,30 @@ All on the Hub under **[`EvanOLeary`](https://huggingface.co/EvanOLeary)** · lo
 | **HQQ 4-bit** (`nbits=4, group=64, axis=1`) | 5.99 → **~1.7 GB** | minor drift; valid CUDA | ~5.8 tok/s | `AutoHQQHFModel.quantize_model(...)` — no calibration |
 | ❌ bitsandbytes 0.49 · ❌ torchao Int4 (needs `mslk`) · ❌ NVFP4 (Blackwell) · ❌ FP8 (Hopper) | — | — | — | unsupported on Ampere/this stack |
 
-### Inference optimization
-- **`torch.compile(mode="max-autotune")`** after `quantize_` recovers most of the int8 throughput.
-- **Sampling for kernels:** `temperature 0.6 · top_k 20 · do_sample=True` → use **pass@k**; `max_new_tokens ≥ 1024` (under-capping truncates kernels); `enable_thinking=False`; system prompt must match the target DSL.
-- **Serving:** vLLM (`trust_remote_code`); **ExecuTorch** export for on-device (fits mobile at 4-bit). NVFP4 + Blackwell is the future low-precision path.
-- **Measured:** HF eager **15.4 tok/s** → **`torch.compile` 32.9 tok/s (2.1×)**, TTFT 71→44 ms; **vLLM/SGLang need a `laguna_dense` plugin** (they assume the MoE structure). Full benchmarks + serving path → [`docs/INFERENCE.md`](docs/INFERENCE.md).
+### Inference — measured (A100, dense model)
+| Backend | TTFT | single-seq | batched throughput | output |
+|---|---|---|---|---|
+| HF transformers, bf16 eager | 71 ms | 15.4 tok/s | — | ✅ valid CUDA |
+| HF + **`torch.compile`** (`mode="default"`) | **44 ms** | **32.9 tok/s (2.1×)** | — | ✅ |
+| **vLLM 0.22 (dense plugin)** | 51 ms | 21.6 tok/s | **see below** | ✅ valid CUDA |
+
+**vLLM batched throughput** (continuous batching — the win for GRPO rollouts/serving):
+
+| batch | 1 | 8 | 32 | 64 |
+|---|---|---|---|---|
+| aggregate tok/s | 21 | 161 | 621 | **1227** |
+
+→ **~80× HF-eager** at batch 64 (per-request steady ~19 tok/s). Real run: **64 kernels generated in 31 s**.
+
+### ✅ vLLM serving works (dense student)
+vLLM's native `laguna.py` is the **MoE teacher**; the dense student loads via a **~20-line,
+`model_type`-gated `LagunaDenseFFN`** that reuses native `LagunaMLP` (so **OG Laguna is untouched** —
+safe to upstream). Patch + run command + gotchas (`apply_chat_template`, `VLLM_USE_FLASHINFER_SAMPLER=0`):
+**[`docs/INFERENCE.md`](docs/INFERENCE.md)** · diff: [`docs/vllm_laguna_dense.patch`](docs/vllm_laguna_dense.patch) ·
+repro: `scripts/bench_vllm_dense.py`, `scripts/bench_vllm_batch.py`.
+
+- **One-off generation** → HF + `torch.compile` (fastest single-seq). **Rollouts / eval / serving** → vLLM (~1227 tok/s).
+- **Sampling:** `temperature 0.6 · top_k 20` → **pass@k**; `max_new_tokens ≥ 1024` (under-capping truncates kernels). **On-device:** ExecuTorch (fits mobile at 4-bit).
 - **Eval isolation:** always compile+run generated kernels in a **subprocess** (`scripts/eval_worker.py`) — a faulty kernel corrupts the CUDA context otherwise.
 
 ---
