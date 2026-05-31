@@ -60,6 +60,7 @@ All on the Hub under **[`EvanOLeary`](https://huggingface.co/EvanOLeary)** · lo
 - **`torch.compile(mode="max-autotune")`** after `quantize_` recovers most of the int8 throughput.
 - **Sampling for kernels:** `temperature 0.6 · top_k 20 · do_sample=True` → use **pass@k**; `max_new_tokens ≥ 1024` (under-capping truncates kernels); `enable_thinking=False`; system prompt must match the target DSL.
 - **Serving:** vLLM (`trust_remote_code`); **ExecuTorch** export for on-device (fits mobile at 4-bit). NVFP4 + Blackwell is the future low-precision path.
+- **Measured:** HF eager **15.4 tok/s** → **`torch.compile` 32.9 tok/s (2.1×)**, TTFT 71→44 ms; **vLLM/SGLang need a `laguna_dense` plugin** (they assume the MoE structure). Full benchmarks + serving path → [`docs/INFERENCE.md`](docs/INFERENCE.md).
 - **Eval isolation:** always compile+run generated kernels in a **subprocess** (`scripts/eval_worker.py`) — a faulty kernel corrupts the CUDA context otherwise.
 
 ---
