@@ -1,0 +1,10 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+  "problem_id": 47,
+  "static_check": "pass"
+}
