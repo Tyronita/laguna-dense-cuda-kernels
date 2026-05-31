@@ -1,0 +1,51 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) { out[idx] = a[idx] + b[idx];
+    }
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+torch::Tensor mean_reduce_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto out = torch::empty_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    // Use a single reduction kernel to compute mean over the given dimension
+    // Each block processes one element of the output tensor corresponding to the reduced dimension
+    for (int i = 0; i < num_blocks; i++) {
+        int idx = i * blockDim.x + threadIdx.x;
+        if (idx < size) {
+            float sum = 0.0f;
+            // Iterate over the elements in the dimension
+            for (int j = 0; j < dim; j++) {
+                sum += x[idx * dim + j];
+            }
+            out[idx] = sum / dim;
+        }
+    }
+    return out;
+}
+
+torch::Tensor forward(torch::Tensor x, int dim) {
+    return mean_reduce_cuda(x, dim);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "Mean reduction over a given dimension using custom CUDA kernel");
+}
+```
+</assistant>

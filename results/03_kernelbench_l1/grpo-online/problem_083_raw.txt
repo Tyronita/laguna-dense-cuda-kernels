@@ -1,0 +1,81 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride=1, padding=0, dilation=1
+// Assumes input shape: [batch, in_channels, height, width] and output shape: [batch, in_channels, height, width]
+__global__ void conv2d_stride_kernel(const float* input, const float* weight, const float* bias, float* output, int batch, int in_channels, int height, int width) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch * in_channels * height * width;
+    if (idx < total) {
+        int w = idx % width;
+        int h = (idx / width) % height;
+        int c = (idx / (width * height)) % in_channels;
+        int b = idx / (width * height * in_channels);
+
+        float sum = bias[c];
+        for (int k = 0; k < 1; k++) {
+            for (int c_in = 0; c_in < in_channels; c_in++) {
+                int in_h = h - 0 + k;
+                int in_w = w - 0 + k;
+                if (in_h >= 0 && in_h < height && in_w >= 0 && in_w < width) {
+                    int input_idx = b * (in_channels * height * width) + c_in * (height * width) + in_h * width + in_w;
+                    int weight_idx = c_in * (1 * 1) + k * 1 + 0;
+                    sum += input[input_idx] * weight[weight_idx];
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation) {
+
+    TORCH_CHECK(x.is_cuda(), "x must be a CUDA tensor");
+    TORCH_CHECK(weight.is_cuda(), "weight must be a CUDA tensor");
+    TORCH_CHECK(bias.is_cuda(), "bias must be a CUDA tensor");
+    TORCH_CHECK(x.dim() == 4, "x must be 4D");
+    TORCH_CHECK(weight.dim() == 4, "weight must be 4D");
+    TORCH_CHECK(weight.size(1) == x.size(1), "Weight in_channels must match x in_channels");
+
+    int batch = x.size(0);
+    int in_channels = x.size(1);
+    int height = x.size(2);
+    int width = x.size(3);
+
+    int out_height = height - 1;
+    int out_width = width - 1;
+
+    auto output = torch::empty({batch, in_channels, out_height, out_width}, x.options());
+
+    int total = batch * in_channels * out_height * out_width;
+    int threads = 256;
+    int blocks = (total + threads - 1) / threads;
+
+    conv2d_stride_kernel<<<blocks, threads>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch,
+        in_channels,
+        height,
+        width
+    );
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "2D convolution with stride=1, padding=0, dilation=1 (CUDA)");
+}
+```
+</assistant>

@@ -1,0 +1,10 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "\"nll_loss_forward_reduce_cuda_kernel_2d_index\" not implemented for 'Float'",
+  "problem_id": 95,
+  "static_check": "pass"
+}

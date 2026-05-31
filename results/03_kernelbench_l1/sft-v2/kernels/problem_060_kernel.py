@@ -1,0 +1,191 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D convolution with optimized thread and block indexing
+__global__ void conv3d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int in_w,
+    int in_h,
+    int in_d,
+    int out_channels,
+    int k_w,
+    int k_h,
+    int k_d,
+    int out_w,
+    int out_h,
+    int out_d,
+    int stride,
+    int padding) {
+
+    // Calculate output dimensions
+    int out_w = (in_w - 1) * stride - 2 * padding + k_w;
+    int out_h = (in_h - 1) * stride - 2 * padding + k_h;
+    int out_d = (in_d - 1) * stride - 2 * padding + k_d;
+
+    // Calculate output channel index
+    int out_channel = blockIdx.x % out_channels;
+    int b = blockIdx.x / out_channels;
+
+    // Calculate output spatial indices
+    int out_idx = blockIdx.y * blockDim.y + threadIdx.y;
+    int out_idx_d = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (out_idx < out_h && out_idx_d < out_d) {
+        float sum = bias[out_channel];
+
+        // Loop over input channels
+        for (int c = 0; c < in_channels; c++) {
+            // Loop over kernel dimensions
+            for (int kw = 0; kw < k_w; kw++) {
+                int in_w_idx = out_idx + padding - kw;
+                if (in_w_idx >= in_w) {
+                    int in_idx = b * (in_channels * in_w * in_h * in_d) +
+                                  c * (in_w * in_h * in_d) +
+                                  in_w_idx * (in_h * in_d) +
+                                  out_idx * in_d +
+                                  out_idx_d;
+                    float in_val = input[in_idx];
+                    int weight_idx = out_channel * (in_channels * k_w * k_h * k_d) +
+                                   c * (k_w * k_h * k_d) +
+                                   kw * (k_h * k_d) +
+                                   k_h * k_d +
+                                   k_d;
+                    sum += in_val * weight[weight_idx];
+                }
+            }
+            for (int kh = 0; kh < k_h; kh++) {
+                int in_h_idx = out_idx + padding - kh;
+                if (in_h_idx >= in_h) {
+                    int in_idx = b * (in_channels * in_w * in_h * in_d) +
+                                 c * (in_w * in_h * in_d) +
+                                 in_h_idx * in_d +
+                                 out_idx_d;
+                    float in_val = input[in_idx];
+                    int weight_idx = out_channel * (in_channels * k_w * k_h * k_d) +
+                                   c * (k_w * k_h * k_d) +
+                                   kh * k_d +
+                                   k_d;
+                    sum += in_val * weight[weight_idx];
+                }
+            }
+            for (int kd = 0; kd < k_d; kd++) {
+                int in_d_idx = out_idx_d + padding - kd;
+                if (in_d_idx >= in_d) {
+                    int in_idx = b * (in_channels * in_w * in_h * in_d) +
+                                   c * (in_w * in_h * in_d) +
+                                   in_d_idx * in_h * in_d +
+                                   out_idx;
+                    float in_val = input[in_idx];
+                    int weight_idx = out_channel * (in_channels * k_w * k_h * k_d) +
+                                   c * (k_w * k_h * k_d) +
+                                     kd * k_h * k_d +
+                                     k_h * k_d +
+                                     k_d;
+                    sum += in_val * weight[weight_idx];
+                }
+            }
+        }
+
+        // Calculate output index
+        int out_idx = b * (out_channels * out_w * out_h * out_d) +
+                       out_channel * (out_w * out_h * out_d) +
+                       out_idx * out_d +
+                       out_idx_d;
+        output[out_idx] = sum;
+    }
+}
+
+// C++ interface exposed to PyTorch
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding) {
+
+    // Input dimensions
+    int batch_size = x.size(0);
+    int in_channels = x.size(1);
+    int in_w = x.size(2);
+    int in_h = x.size(3);
+    int in_d = x.size(4);
+
+    // Weight dimensions
+    int out_channels = weight.size(0);
+    int k_w = weight.size(2);
+    int k_h = weight.size(3);
+    int k_d = weight.size(4);
+
+    // Calculate output dimensions
+    int out_w = (in_w - 1) * stride - 2 * padding + k_w;
+    int out_h = (in_h - 1) * stride - 2 * padding + k_h;
+    int out_d = (in_d - 1) * stride - 2 * padding + k_d;
+
+    // Allocate output tensor
+    auto output = torch::empty({batch_size, out_channels, out_w, out_h, out_d}, x.options());
+
+    // Define block and grid sizes
+    dim3 block(16, 16, 16);
+    dim3 grid(
+        batch_size * out_channels,
+        (out_h + block.y - 1) / block.y,
+        (out_d + block.z - 1) / block.z
+    );
+
+    // Launch kernel
+    conv3d_kernel<<<grid, block>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        in_w,
+        in_h,
+        in_d,
+        out_channels,
+        k_w,
+        k_h,
+        k_d,
+        out_w,
+        out_h,
+        out_d,
+        stride,
+        padding
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

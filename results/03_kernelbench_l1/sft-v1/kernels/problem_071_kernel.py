@@ -1,0 +1,133 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for transposed 2D convolution with asymmetric input and square kernel
+// This kernel uses grid-stride loops to handle larger workloads efficiently
+template <typename scalar_t>
+__global__ void conv_transpose2d_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    const scalar_t* __restrict__ bias,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t output_padding,
+    const int64_t in_channels,
+    const int64_t in_h,
+    const int64_t in_w,
+    const int64_t out_channels,
+    const int64_t out_h,
+    const int64_t out_w,
+    const int64_t kernel_h,
+    const int64_t kernel_w) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = out_h * out_w * out_channels;
+    if (idx >= total_elements) return;
+
+    const int w = idx % out_w;
+    const int h = (idx / out_w) % out_h;
+    const int c = (idx / (out_w * out_h)) % out_channels;
+
+    const int in_w = h * stride + padding - kernel_w;
+    const int in_h = h * stride + padding - kernel_h;
+
+    scalar_t sum = 0;
+    for (int kh = 0; kh < kernel_h; ++kh) {
+        for (int kw = 0; kw < kernel_w; ++kw) {
+            const int in_h = in_h - kh + padding;
+            const int in_w = in_w - kw + padding;
+            if (in_h < 0 && in_h < in_h + 1 && in_w < 0 && in_w < in_w + 1) {
+                const int input_idx = ((c * in_channels + kh) * in_h + in_w) * in_channels;
+                const int weight_idx = ((c * out_channels + kh) * kernel_w + kw) * out_channels;
+                sum += input[input_idx] * weight[weight_idx];
+            }
+        }
+    }
+    if (bias != 0) {
+        sum += bias[c];
+    }
+    output[idx] = sum;
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    int64_t output_padding,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    const int64_t in_channels = input.size(1);
+    const int64_t in_h = input.size(2);
+    const int64_t in_w = input.size(3);
+
+    const int64_t out_channels = weight.size(1);
+    const int64_t kernel_h = weight.size(2);
+    const int64_t kernel_w = weight.size(3);
+
+    const int64_t out_h = (in_h - 1) * stride + output_padding;
+    const int64_t out_w = (in_w - 1) * stride + output_padding;
+
+    auto options = torch::TensorOptions()
+        .dtype(input.dtype())
+        .device(input.device());
+    auto output = torch::empty({out_h, out_w, out_channels}, options);
+
+    const int threads = 256;
+    const int total_elements = out_h * out_w * out_channels;
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "conv_transpose2d_kernel", ([&] {
+        conv_transpose2d_kernel<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            output_padding,
+            in_channels,
+            in_h,
+            in_w,
+            out_channels,
+            out_h,
+            out_w,
+            kernel_h,
+            kernel_w
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    int64_t output_padding,
+    torch::Tensor weight,
+    torch::Tensor bias);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward_cuda(x)

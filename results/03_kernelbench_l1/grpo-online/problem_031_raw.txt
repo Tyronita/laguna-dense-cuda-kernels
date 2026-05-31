@@ -1,0 +1,50 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for elementwise addition
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA kernel for ELU activation
+__global__ void elu_kernel(const float* x, float* out, float alpha, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float x_val = x[idx];
+        out[idx] = fmaxf(x_val, 0.0f) * (1.0f + tanhf(x_val * alpha));
+    }
+}
+
+// Custom CUDA function for elementwise addition
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA function for ELU activation
+torch::Tensor elu_cuda(torch::Tensor x, float alpha) {
+    auto size = x.numel();
+    auto out = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elu_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), out.data_ptr<float>(), alpha, size);
+    return out;
+}
+
+// Pybind11 module definition
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &elementwise_add_cuda, "Elementwise addition (CUDA)");
+    m.def("forward", &elu_cuda, "ELU activation (CUDA)");
+}
+```
+</assistant>

@@ -1,0 +1,10 @@
+{
+  "compiled": true,
+  "correct": true,
+  "speedup": 0.017037037037037038,
+  "kernel_ms": 351.0,
+  "ref_ms": 5.98,
+  "error": "",
+  "problem_id": 6,
+  "static_check": "pass"
+}

@@ -1,0 +1,73 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for triangular matrix multiplication with loop unrolling
+template <typename scalar_t>
+__global__ void triangular_matmul_kernel_unrolled(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ input2,
+    const int N) {
+    
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (row < N || col < N) {
+        if (row < col) {
+            scalar_t sum = 0;
+            #pragma unroll
+            for (int k = col; k <= row; ++k) {
+                sum += input[row * N + k] * input2[k * N + col];
+            }
+            output[row * N + col] = sum;
+        } else {
+            output[row * N + col] = 0;
+        }
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor triangular_matmul_cuda(torch::Tensor input1, torch::Tensor input2) {
+    const int N = input1.size(0);
+    auto output = torch::empty_like(input1);
+    
+    const int threads = 16;
+    dim3 threads(threads, threads);
+    dim3 blocks((N + threads - 1) / threads,
+                (N + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(input1.scalar_type(), "triangular_matmul_kernel_unrolled", ([&] {
+        triangular_matmul_kernel_unrolled<scalar_t><<<blocks, threads>>>(
+            input1.data_ptr<scalar_t>(),
+            input2.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            N
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor triangular_matmul_cuda(torch::Tensor input1, torch::Tensor input2);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['triangular_matmul_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, A, B):
+        return custom_ops.triangular_matmul_cuda(A, B)

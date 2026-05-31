@@ -1,0 +1,30 @@
+{
+  "model": "EvanOLeary/laguna-xs2-dense-k8-cuda-rft",
+  "level": 1,
+  "total_problems": 100,
+  "code_extracted": 96,
+  "compiled": 23,
+  "compile_rate": 0.23,
+  "correct": 10,
+  "correct_rate": 0.1,
+  "avg_speedup": 14.564535661176674,
+  "median_speedup": 0.20642201834862386,
+  "faster_than_ref": 1,
+  "faster_rate": 0.01,
+  "static_check_fails": 0,
+  "generation_time_s": 0.07265520095825195,
+  "total_gen_tokens": 0,
+  "composite_score": 0.365,
+  "all_speedups": [
+    0.026542056074766354,
+    0.017037037037037038,
+    0.12549019607843137,
+    0.23726541554959787,
+    0.12294264339152118,
+    0.20642201834862386,
+    143.0,
+    0.1707891637220259,
+    0.9074074074074074,
+    0.8314606741573034
+  ]
+}

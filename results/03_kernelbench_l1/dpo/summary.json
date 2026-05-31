@@ -1,0 +1,22 @@
+{
+  "model": "EvanOLeary/laguna-xs2-dense-k8-cuda-dpo",
+  "level": 1,
+  "total_problems": 100,
+  "code_extracted": 94,
+  "compiled": 21,
+  "compile_rate": 0.21,
+  "correct": 2,
+  "correct_rate": 0.02,
+  "avg_speedup": 0.5535681403265096,
+  "median_speedup": 0.8747099767981439,
+  "faster_than_ref": 0,
+  "faster_rate": 0.0,
+  "static_check_fails": 0,
+  "generation_time_s": 0.07770586013793945,
+  "total_gen_tokens": 0,
+  "composite_score": 0.11203522104897644,
+  "all_speedups": [
+    0.23242630385487528,
+    0.8747099767981439
+  ]
+}

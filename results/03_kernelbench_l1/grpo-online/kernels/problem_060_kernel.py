@@ -1,0 +1,130 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D convolution with stride=1, padding=0, dilation=1
+// Assumes input tensor shape: [batch_size, in_channels, width, height, depth]
+// and output tensor shape: [batch_size, out_channels, width_out, height_out, depth_out]
+
+__global__ void conv3d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int in_width,
+    int in_height,
+    int in_depth,
+    int out_channels,
+    int out_width,
+    int out_height,
+    int out_depth) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * out_channels * out_width * out_height * out_depth;
+    if (idx < total) {
+        // Decode output indices
+        int w_out = idx % out_width;
+        int h_out = (idx / out_width) % out_height;
+        int d_out = (idx / (out_width * out_height)) % out_depth;
+        int c_out = (idx / (out_width * out_height * out_depth)) % out_channels;
+        int b = idx / (out_width * out_height * out_depth * out_channels);
+
+        float sum = bias[c_out];
+
+        // Convolution with stride=1, padding=0, dilation=1
+        for (int c_in = 0; c_in < in_channels; c_in++) {
+            for (int w_in = 0; w_in < in_width; w_in++) {
+                for (int h_in = 0; h_in < in_height; h_in++) {
+                    for (int d_in = 0; d_in < in_depth; d_in++) {
+                        int input_idx = b * (in_channels * in_width * in_height * in_depth) +
+                                       c_in * (in_width * in_height * in_depth) +
+                                       w_in * (in_height * in_depth) +
+                                       h_in * in_depth + d_in;
+                        int weight_idx = c_in * (in_channels * 3 * 3 * 3) +
+                                         w_in * (3 * 3 * 3) +
+                                         h_in * (3 * 3 * 3) +
+                                         d_in * (3 * 3 * 3);
+                        sum += input[input_idx] * weight[weight_idx];
+                    }
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation) {
+
+    // Input tensor of shape [batch_size, in_channels, width, height, depth]
+    // Output tensor of shape [batch_size, out_channels, width_out, height_out, depth_out]
+    int batch_size = x.size(0);
+    int in_channels = x.size(1);
+    int in_width = x.size(2);
+    int in_height = x.size(3);
+    int in_depth = x.size(4);
+    int out_channels = weight.size(0);
+    int out_width = (in_width - 1) * stride - 2 * padding;
+    int out_height = (in_height - 1) * stride - 2 * padding;
+    int out_depth = (in_depth - 1) * stride - 2 * padding;
+
+    auto output = torch::empty({batch_size, out_channels, out_width, out_height, out_depth}, x.options());
+
+    int total = batch_size * out_channels * out_width * out_height * out_depth;
+    int threads = 256;
+    int blocks = (total + threads - 1) / threads;
+
+    conv3d_kernel<<<blocks, threads>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        in_width,
+        in_height,
+        in_depth,
+        out_channels,
+        out_width,
+        out_height,
+        out_depth
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

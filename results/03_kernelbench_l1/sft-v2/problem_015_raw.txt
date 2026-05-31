@@ -1,0 +1,58 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Optimized triangular matmul kernel with loop unrolling and efficient thread mapping
+__global__ void triangular_matmul_kernel(const float* A, const float* B, float* C, int N) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < N && col < N) {
+        if (row < col) {
+            C[row * N + col] = 0.0f;
+        } else {
+            float sum = 0.0f;
+            // Unroll loop for better performance
+            #pragma unroll 4
+            for (int k = col; k <= row; ++k) {
+                sum += A[row * N + k] * B[k * N + col];
+            }
+            C[row * N + col] = sum;
+        }
+    }
+}
+
+// C++ interface exposed via PyBind11
+torch::Tensor triangular_matmul_cuda(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.is_cuda(), "Input A must be a CUDA tensor");
+    TORCH_CHECK(B.is_cuda(), "Input B must be a CUDA tensor");
+    TORCH_CHECK(A.dim() == 2, "Input A must be 2D");
+    TORCH_CHECK(B.dim() == 2, "Input B must be 2D");
+    TORCH_CHECK(A.size(0) == A.size(1), "Input A must be square");
+    TORCH_CHECK(B.size(0) == B.size(1), "Input B must be square");
+    TORCH_CHECK(A.size(0) == B.size(0), "Input A and B must be the same size");
+
+    int N = A.size(0);
+    auto C = torch::zeros_like(A);
+
+    // Use 16x16 block size for better occupancy
+    const int block_size = 16;
+    const int num_blocks_x = (N + block_size - 1) / block_size;
+    const int num_blocks_y = (N + block_size - 1) / block_size;
+
+    triangular_matmul_kernel<<<num_blocks_x, num_blocks_y>>>(
+        A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), N
+    );
+
+    cudaError_t err = cudaGetLastError();
+    TORCH_CHECK(err == cudaSuccess, "Kernel failed: ", cudaGetErrorString(err));
+
+    return C;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &triangular_matmul_cuda, "Triangular matrix multiplication (CUDA)");
+}
+```
+</assistant>

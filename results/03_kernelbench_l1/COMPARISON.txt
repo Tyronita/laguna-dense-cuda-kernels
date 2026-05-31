@@ -1,0 +1,171 @@
+==========================================================================================
+KernelBench L1 — All Models Comparison
+==========================================================================================
+
+Model            Eval  Compile  Correct   Faster  Avg Spdup  Med Spdup  fast_0
+------------------------------------------------------------------------------------------
+GRPO-offline    100      19%       9%        1     8.489x     0.265x     9%
+GRPO-online     100      23%      10%        1    14.565x     0.206x    10%
+DPO             100      27%       2%        0     0.554x     0.875x     2%
+SFT-v1          100      27%       0%        0     0.000x     0.000x     0%
+SFT-v2          100      21%       0%        0     0.000x     0.000x     0%
+
+==========================================================================================
+Per-Problem Comparison (completed models only)
+==========================================================================================
+PID  GRPO-offline    GRPO-online     DPO             SFT-v1          SFT-v2          
+------------------------------------------------------------------------------------------
+  1  OK 0.263x       OK 0.027x       COMPILED        COMPILED        COMPILED        
+  2  FAIL no code ex COMPILED        COMPILED        COMPILED        COMPILED        
+  3  FAIL CUDA error FAIL CUDA error COMPILED        COMPILED        COMPILED        
+  4  FAIL no code ex COMPILED        COMPILED        COMPILED        COMPILED        
+  5  FAIL eval retur FAIL eval retur COMPILED        COMPILED        COMPILED        
+  6  OK 0.122x       OK 0.017x       COMPILED        COMPILED        COMPILED        
+  7  FAIL no code ex COMPILED        FAIL Error buil FAIL Ninja is r FAIL Ninja is r 
+  8  OK 0.243x       OK 0.125x       COMPILED        COMPILED        COMPILED        
+  9  FAIL no code ex OK 0.237x       COMPILED        COMPILED        COMPILED        
+ 10  COMPILED        OK 0.123x       FAIL /data/.tor COMPILED        COMPILED        
+ 11  FAIL no code ex OK 0.206x       FAIL /data/.tor FAIL /data/.tor FAIL /data/.tor 
+ 12  OK 72.600x      OK 143.000x     COMPILED        FAIL /data/.tor FAIL Ninja is r 
+ 13  OK 0.263x       COMPILED        COMPILED        COMPILED        FAIL /data/.tor 
+ 14  COMPILED        COMPILED        COMPILED        COMPILED        FAIL Ninja is r 
+ 15  OK 0.265x       COMPILED        COMPILED        COMPILED        COMPILED        
+ 16  FAIL no code ex COMPILED        COMPILED        FAIL Ninja is r COMPILED        
+ 17  FAIL no code ex OK 0.171x       OK 0.232x       COMPILED        COMPILED        
+ 18  FAIL no code ex COMPILED        FAIL /data/.tor COMPILED        FAIL Ninja is r 
+ 19  OK 0.922x       OK 0.907x       FAIL /data/.tor FAIL Syntax err COMPILED        
+ 20  COMPILED        COMPILED        COMPILED        COMPILED        COMPILED        
+ 21  FAIL Syntax err FAIL Syntax err COMPILED        FAIL /data/.tor COMPILED        
+ 22  OK 0.876x       OK 0.831x       OK 0.875x       FAIL /data/.tor FAIL /data/.tor 
+ 23  COMPILED        FAIL CUDA error FAIL CUDA error FAIL Ninja is r FAIL /data/.tor 
+ 24  COMPILED        COMPILED        COMPILED        COMPILED        COMPILED        
+ 25  COMPILED        FAIL Error buil COMPILED        COMPILED        COMPILED        
+ 26  OK 0.846x       FAIL Error buil COMPILED        FAIL CUDA out o FAIL CUDA out o 
+ 27  FAIL no code ex FAIL no code ex FAIL no code ex FAIL Ninja is r FAIL no code ex 
+ 28  COMPILED        FAIL Error buil FAIL /data/.tor COMPILED        FAIL Ninja is r 
+ 29  FAIL no code ex FAIL eval retur FAIL no code ex COMPILED        COMPILED        
+ 30  FAIL Syntax err FAIL Syntax err FAIL no code ex FAIL Ninja is r FAIL no code ex 
+ 31  FAIL Error buil FAIL ModelNew._ FAIL /data/.tor FAIL no code ex FAIL ModelNew._ 
+ 32  COMPILED        COMPILED        COMPILED        COMPILED        FAIL Ninja is r 
+ 33  FAIL no code ex FAIL no code ex FAIL no code ex FAIL ModelNew._ FAIL no code ex 
+ 34  FAIL ModelNew._ FAIL Error buil FAIL ModelNew._ FAIL /data/.tor FAIL Ninja is r 
+ 35  FAIL ModelNew._ FAIL Error buil FAIL ModelNew._ FAIL /data/.tor FAIL Ninja is r 
+ 36  FAIL ModelNew._ FAIL Error buil FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 37  FAIL eval retur FAIL eval retur FAIL Syntax err COMPILED        FAIL Syntax err 
+ 38  FAIL CUDA error FAIL CUDA error FAIL CUDA error COMPILED        COMPILED        
+ 39  FAIL /data/.tor FAIL CUDA error COMPILED        COMPILED        FAIL /data/.tor 
+ 40  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL no code ex FAIL Ninja is r 
+ 41  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor 
+ 42  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 43  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 44  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 45  FAIL Error buil FAIL Error buil FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 46  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 47  FAIL Error buil FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 48  FAIL Error buil FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 49  FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor FAIL Syntax err FAIL ModelNew._ 
+ 50  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Syntax err FAIL Ninja is r 
+ 51  FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor FAIL ModelNew._ FAIL Ninja is r 
+ 52  FAIL Syntax err FAIL Syntax err FAIL Syntax err FAIL Ninja is r FAIL Syntax err 
+ 53  FAIL ModelNew._ FAIL eval retur FAIL Syntax err FAIL ModelNew._ FAIL Syntax err 
+ 54  FAIL Error buil FAIL ModelNew._ FAIL /data/.tor FAIL ModelNew._ FAIL ModelNew._ 
+ 55  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 56  FAIL no code ex FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 57  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 58  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 59  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 60  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 61  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor FAIL Ninja is r 
+ 62  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 63  FAIL Error buil FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 64  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor FAIL Syntax err 
+ 65  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 66  FAIL ModelNew._ FAIL Error buil FAIL ModelNew._ FAIL no code ex FAIL Ninja is r 
+ 67  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 68  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 69  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor FAIL ModelNew._ 
+ 70  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 71  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 72  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 73  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 74  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor 
+ 75  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL no code ex FAIL Ninja is r 
+ 76  FAIL ModelNew._ FAIL Error buil FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 77  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL /data/.tor 
+ 78  FAIL ModelNew._ FAIL Syntax err FAIL ModelNew._ FAIL Ninja is r FAIL Ninja is r 
+ 79  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 80  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL no code ex FAIL /data/.tor 
+ 81  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL no code ex FAIL Ninja is r 
+ 82  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 83  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ 
+ 84  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 85  FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 86  FAIL Error buil FAIL no code ex FAIL ModelNew._ FAIL no code ex FAIL no code ex 
+ 87  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 88  FAIL Error buil FAIL eval retur FAIL no code ex COMPILED        FAIL Ninja is r 
+ 89  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL no code ex FAIL ModelNew._ 
+ 90  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 91  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r FAIL ModelNew._ 
+ 92  FAIL Error buil FAIL Error buil FAIL ModelNew._ FAIL ModelNew._ FAIL Ninja is r 
+ 93  FAIL ModelNew._ FAIL ModelNew._ FAIL ModelNew._ FAIL Syntax err FAIL ModelNew._ 
+ 94  COMPILED        FAIL eval retur COMPILED        FAIL Syntax err FAIL Ninja is r 
+ 95  FAIL no code ex FAIL Error buil FAIL "nll_loss_ FAIL expected t FAIL expected t 
+ 96  FAIL Error buil FAIL Error buil COMPILED        COMPILED        COMPILED        
+ 97  FAIL Error buil COMPILED        COMPILED        COMPILED        FAIL no code ex 
+ 98  COMPILED        COMPILED        COMPILED        COMPILED        COMPILED        
+ 99  FAIL no code ex FAIL no code ex FAIL no code ex FAIL ModelNew._ FAIL no code ex 
+100  FAIL Error buil FAIL CUDA error COMPILED        FAIL Ninja is r FAIL CUDA error 
+
+==========================================================================================
+Differential Analysis
+==========================================================================================
+
+GRPO-offline vs GRPO-online:
+  Both correct: 6  [1, 6, 8, 12, 19, 22]
+  Only GRPO-offline: 3  [13, 15, 26]
+  Only GRPO-online: 4  [9, 10, 11, 17]
+
+GRPO-offline vs DPO:
+  Both correct: 1  [22]
+  Only GRPO-offline: 8  [1, 6, 8, 12, 13, 15, 19, 26]
+  Only DPO: 1  [17]
+
+GRPO-offline vs SFT-v1:
+  Both correct: 0  
+  Only GRPO-offline: 9  [1, 6, 8, 12, 13, 15, 19, 22, 26]
+  Only SFT-v1: 0  
+
+GRPO-offline vs SFT-v2:
+  Both correct: 0  
+  Only GRPO-offline: 9  [1, 6, 8, 12, 13, 15, 19, 22, 26]
+  Only SFT-v2: 0  
+
+GRPO-online vs DPO:
+  Both correct: 2  [17, 22]
+  Only GRPO-online: 8  [1, 6, 8, 9, 10, 11, 12, 19]
+  Only DPO: 0  
+
+GRPO-online vs SFT-v1:
+  Both correct: 0  
+  Only GRPO-online: 10  [1, 6, 8, 9, 10, 11, 12, 17, 19, 22]
+  Only SFT-v1: 0  
+
+GRPO-online vs SFT-v2:
+  Both correct: 0  
+  Only GRPO-online: 10  [1, 6, 8, 9, 10, 11, 12, 17, 19, 22]
+  Only SFT-v2: 0  
+
+DPO vs SFT-v1:
+  Both correct: 0  
+  Only DPO: 2  [17, 22]
+  Only SFT-v1: 0  
+
+DPO vs SFT-v2:
+  Both correct: 0  
+  Only DPO: 2  [17, 22]
+  Only SFT-v2: 0  
+
+SFT-v1 vs SFT-v2:
+  Both correct: 0  
+  Only SFT-v1: 0  
+  Only SFT-v2: 0  

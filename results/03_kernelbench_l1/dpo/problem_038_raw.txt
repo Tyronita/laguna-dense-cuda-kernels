@@ -1,0 +1,32 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void l1_norm_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        int d = idx / dim;
+        float sum = 0.0f;
+        for (int i = 0; i < dim; i++) {
+            sum += input[idx * dim + i] * input[idx * dim + i];
+        }
+        output[idx] = input[idx] / (sum / dim);
+    }
+}
+
+torch::Tensor l1_norm_cuda(torch::Tensor x) {
+    auto size = x.numel();
+    auto dim = x.size(1);
+    auto out = torch::empty_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    l1_norm_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), out.data_ptr<float>(), size, dim);
+    return out;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &l1_norm_cuda, "L1 normalization (CUDA)");
+}
+```
+</assistant>
