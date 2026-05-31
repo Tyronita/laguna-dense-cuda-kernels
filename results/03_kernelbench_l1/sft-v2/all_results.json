@@ -1,0 +1,902 @@
+[
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 1
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 2
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 3
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 4
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 5
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 6
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 7
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 8
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 9
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 10
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z11matmul_cudaN2at6TensorES0_",
+    "problem_id": 11
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 12
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z11matmul_cudaN2at6TensorES0_",
+    "problem_id": 13
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 14
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 15
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 16
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 17
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 18
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 19
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 20
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 21
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z11matmul_cudaN2at6TensorES0_",
+    "problem_id": 22
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z9relu_cudaN2at6TensorE",
+    "problem_id": 23
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 24
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 25
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA out of memory. Tried to allocate 6.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 3.53 GiB is free. Process 1042780 has 416.00 MiB memory in use. Process 1070030 has 42.48 GiB memory in use. Process 1070085 has 19.98 GiB memory in use. Process 1070109 has 6.41 GiB memory in use. Including non-PyTorch memory, this process has 6.41 GiB memory in use. Of the allocated memory 6.00 GiB is allocated by PyTorch, and 0 bytes is reserved by PyTorch but unallocated. If reserved but unalloca",
+    "problem_id": 26
+  },
+  {
+    "problem_id": 27,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 28
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 29
+  },
+  {
+    "problem_id": 30,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 31
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 32
+  },
+  {
+    "problem_id": 33,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 34
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 35
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 36
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 37
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 38
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z20elementwise_add_cudaN2at6TensorES0_",
+    "problem_id": 39
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 40
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z20elementwise_add_cudaN2at6TensorES0_",
+    "problem_id": 41
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 5 were given",
+    "problem_id": 42
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 43
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 44
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 45
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 46
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 47
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 48
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 49
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 50
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 51
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 52
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 53
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 54
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 55
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 56
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 57
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 58
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 59
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 60
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 61
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 62
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 63
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 64
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 65
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 66
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 67
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 68
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 69
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 70
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 4 were given",
+    "problem_id": 71
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 72
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 7 were given",
+    "problem_id": 73
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z17maxReduction_cudaN2at6TensorE",
+    "problem_id": 74
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 75
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 6 were given",
+    "problem_id": 76
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z11argmax_cudaN2at6TensorEi",
+    "problem_id": 77
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 78
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 79
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z11argmax_cudaN2at6TensorEi",
+    "problem_id": 80
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 81
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 5 were given",
+    "problem_id": 82
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 6 were given",
+    "problem_id": 83
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 6 were given",
+    "problem_id": 84
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 85
+  },
+  {
+    "problem_id": 86,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 3 were given",
+    "problem_id": 87
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 88
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 89
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 90
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 91
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 92
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "ModelNew.__init__() takes 1 positional argument but 2 were given",
+    "problem_id": 93
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Ninja is required to load C++ extensions (pip install ninja to get it)",
+    "problem_id": 94
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "expected target dtype to be Long or Byte, but got Float",
+    "problem_id": 95
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 96
+  },
+  {
+    "problem_id": 97,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 98
+  },
+  {
+    "problem_id": 99,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "no code extracted from model output"
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 100
+  }
+]
