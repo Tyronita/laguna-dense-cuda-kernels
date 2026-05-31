@@ -1,0 +1,35 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void fused_norm_relu_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float norm_val = input[idx] / sqrtf(input[idx] + 1e-5f);
+        output[idx] = norm_val * (norm_val > 0.0f);
+    }
+}
+
+torch::Tensor fused_norm_relu_cuda(torch::Tensor input) {
+    auto size = input.numel();
+    auto output = torch::empty_like(input);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    fused_norm_relu_kernel<<<num_blocks, block_size>>>(input.data_ptr<float>(), output.data_ptr<float>(), size);
+    return output;
+}
+
+torch::Tensor fused_norm_relu_cpp_source = "torch::Tensor fused_norm_relu_cuda(torch::Tensor input);"
+
+torch::Tensor fused_norm_relu = load_inline(name="fused_norm_relu", cpp_sources=fused_norm_relu_cpp_source, cuda_sources=fused_norm_relu_source, functions=["fused_norm_relu_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fused_norm_relu = fused_norm_relu
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fused_norm_relu.fused_norm_relu_cuda(x)
+```
+</assistant>

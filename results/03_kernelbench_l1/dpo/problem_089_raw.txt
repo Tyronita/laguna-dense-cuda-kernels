@@ -1,0 +1,26 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void optimized_cumsum_kernel(const float* input, float* output, int size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        output[idx] += input[idx];
+    }
+}
+
+torch::Tensor optimized_cumsum_cuda(torch::Tensor x, int dim) {
+    auto size = x.numel();
+    auto output = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    optimized_cumsum_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), output.data_ptr<float>(), size, dim);
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &optimized_cumsum_cuda, "Optimized cumulative sum with CUDA kernel");
+}
+```
+</assistant>

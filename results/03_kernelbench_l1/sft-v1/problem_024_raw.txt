@@ -1,0 +1,54 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for LogSoftmax with loop unrolling
+template <typename scalar_t>
+__global__ void logsoftmax_kernel_unrolled(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const int64_t size) {
+    
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        const scalar_t val = input[idx];
+        const scalar_t max_val = val;
+        const scalar_t sum_val = 0;
+        
+        // Unroll the loop for better performance
+        #pragma unroll
+        for (int i = 0; i < 4; ++i) {
+            const scalar_t val_i = val - max_val;
+            sum_val += val_i;
+        }
+        
+        // Compute the final result
+        const scalar_t result = (sum_val - max_val) / 4;
+        output[idx] = result;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(torch::Tensor input) {
+    auto output = torch::empty_like(input);
+    const int threads = 256;
+    const int blocks = (input.numel() + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "logsoftmax_kernel_unrolled", ([&] {
+        logsoftmax_kernel_unrolled<scalar_t><<<blocks, threads>>>(
+            input.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            input.numel()
+        );
+    }));
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward_cuda, "LogSoftmax forward (CUDA)");
+}
+```
+</assistant>

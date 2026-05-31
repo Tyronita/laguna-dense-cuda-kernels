@@ -1,0 +1,10 @@
+{
+  "compiled": true,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "correctness check failed",
+  "problem_id": 9,
+  "static_check": "pass"
+}

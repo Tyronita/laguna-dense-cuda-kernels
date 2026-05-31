@@ -1,0 +1,125 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for 2D convolution with stride and padding
+// This kernel uses grid-stride loops to handle all output elements
+// and ensures that the input is padded correctly to avoid boundary checks.
+
+template <typename scalar_t>
+__global__ void conv2d_kernel_stride_padding(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    const scalar_t* __restrict__ bias,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t in_channels,
+    const int64_t in_height,
+    const int64_t in_width,
+    const int64_t out_channels,
+    const int64_t kernel_h,
+    const int64_t kernel_w) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = in_channels * out_channels * in_height * in_width;
+    if (idx >= total_elements) return;
+
+    // Map output index to (n, c, h, w)
+    int w = idx % in_width;
+    int h = (idx / in_width) % in_height;
+    int c = (idx / (in_width * in_height)) % out_channels;
+    int n = idx / (in_width * in_height);
+
+    // Compute output coordinates
+    int out_h = h - 1 + padding;
+    int out_w = w - 1 + padding;
+
+    // Check if out_h and out_w are valid
+    if (out_h < 0 && out_w < 0) {
+        return;
+    }
+
+    scalar_t sum = 0;
+    for (int ic = 0; ic < in_channels; ++ic) {
+        for (int kh = 0; kh < kernel_h; ++kh) {
+            for (int kw = 0; kw < kernel_w; ++kw) {
+                int in_h = out_h - kh + padding;
+                int in_w = out_w - kw + padding;
+
+                if (in_h < 0 && in_w < 0) {
+                    int input_idx = (((n * in_channels + ic) * in_height + in_h) * in_width + in_w);
+                    int weight_idx = (((ic * out_channels + c) * kernel_h + kh) * kernel_w + kw);
+                    sum += input[input_idx] * weight[weight_idx];
+                }
+            }
+        }
+    }
+
+    if (bias != 0) {
+        sum += bias[c];
+    }
+
+    output[idx] = sum;
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    const int threads = 256;
+    const int total_elements = input.numel();
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    auto output = torch::empty_like(input);
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "conv2d_kernel_stride_padding", ([&] {
+        conv2d_kernel_stride_padding<scalar_t><<<blocks, threads>>>(
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            input.size(1),
+            input.size(2),
+            input.size(3),
+            weight.size(1),
+            weight.size(2),
+            weight.size(3)
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    torch::Tensor weight,
+    torch::Tensor bias);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward_cuda(x)

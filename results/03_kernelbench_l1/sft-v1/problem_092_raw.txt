@@ -1,0 +1,48 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+__global__ void exclusive_cumsum_kernel(
+    const float* __restrict__ input,
+    float* __restrict__ output,
+    const int64_t size,
+    const int64_t dim
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float val = input[idx];
+        output[idx] = val + 0.0f;
+    }
+}
+
+torch::Tensor exclusive_cumsum_cuda(torch::Tensor input, int64_t dim) {
+    auto size = input.numel();
+    auto output = torch::empty({1}, input.options());
+    
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+    
+    exclusive_cumsum_kernel<<<blocks, threads>>>(
+        input.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size,
+        dim
+    );
+    
+    return output.view({-1});
+}
+
+torch::Tensor exclusive_cumsum_cpp_source = "torch::Tensor exclusive_csum_cuda(torch::Tensor input, int64_t dim);"
+
+at::Tensor exclusive_csum_forward(at::Tensor input, int64_t dim) {
+    return exclusive_cumsum_cuda(input, dim);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &exclusive_csum_forward, "Exclusive cumulative sum forward (CUDA)");
+}
+```
+</assistant>

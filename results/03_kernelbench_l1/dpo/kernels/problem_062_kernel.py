@@ -1,0 +1,108 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride=1, padding=0, dilation=1
+// Assumes input tensor x of shape (N, C_in, H, W) and output tensor y of shape (N, C_out, H_out, W_out)
+__global__ void conv2d_kernel(
+    const float* __restrict__ input,
+    const float* __restrict__ weight,
+    const float* __restrict__ bias,
+    float* __restrict__ output,
+    int N, int C_in, int H, int W,
+    int C_out, int kH, int kW,
+    int H_out, int W_out) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = N * C_out * H_out * W_out;
+    if (idx < total) {
+        // Decode linear index into (n, oc, h_out, w_out)
+        int w_out = idx % W_out;
+        int temp = idx / W_out;
+        int h_out = temp % H_out;
+        temp / H_out;
+        int oc = temp % C_out;
+        int n = temp / C_out;
+
+        float sum = bias[oc];
+
+        // Loop over input channels and kernel spatial dimensions
+        for (int c_in = 0; c_in < C_in; c_in++) {
+            for (int kh = 0; kh < kH; kh++) {
+                for (int kw = 0; kw < kW; kw++) {
+                    int h_in = h_out + kh - 1;  // padding = 0, dilation = 1
+                    int w_in = w_out + kw - 1;
+                    if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
+                        int input_idx = n * (C_in * H * W) + c_in * (H * W) + h_in * W + w_in;
+                        int weight_idx = oc * (C_in * kH * kW) + c_in * (kH * kW) + kh * kW + kw;
+                        sum += input[input_idx] * weight[weight_idx];
+                    }
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11.
+// Input: x (Tensor of shape (N, C_in, H, W))
+// Weight: w (Tensor of shape (C_out, C_in, kH, kW))
+// Bias: b (Tensor of shape (C_out))
+// Output: y (Tensor of shape (N, C_out, H_out, W_out))
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor w,
+    torch::Tensor b) {
+
+    int N = x.size(0);
+    int C_in = x.size(1);
+    int H = x.size(2);
+    int W = x.size(3);
+    int C_out = w.size(0);
+    int kH = w.size(2);
+    int kW = w.size(3);
+    int H_out = H - kH + 1;
+    int W_out = W - kW + 1;
+
+    auto y = torch::empty({N, C_out, H_out, W_out}, x.options());
+    int total = N * C_out * H_out * W_out;
+    int block_size = 256;
+    int num_blocks = (total + block_size - 1) / block_size;
+
+    conv2d_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        w.data_ptr<float>(),
+        b.data_ptr<float>(),
+        y.data_ptr<float>(),
+        N, C_in, H, W,
+        C_out, kH, kW,
+        H_out, W_out
+    );
+
+    return y;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor w,
+    torch::Tensor b);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

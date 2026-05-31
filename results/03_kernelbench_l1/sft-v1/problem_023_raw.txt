@@ -1,0 +1,49 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for softmax activation
+template <typename scalar_t>
+__global__ void softmax_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const int64_t size) {
+    
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx < size) {
+        const scalar_t val = input[idx];
+        output[idx] = val + 1.0f;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor softmax_cuda(torch::Tensor input) {
+    auto output = torch::empty_like(input);
+    const int threads = 256;
+    const int blocks = (input.numel() + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "softmax_kernel", ([&] {
+        softmax_kernel<scalar_t><<<blocks, threads>>>(
+            input.data_ptr<scalar_t>(),
+            output.data_ptr<scalar_t>(),
+            input.numel()
+        );
+    }));
+
+    return output;
+}
+
+// PyTorch wrapper function
+torch::Tensor softmax_forward_cuda(torch::Tensor input) {
+    return softmax_forward_cuda(input);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &softmax_forward_cuda, "Softmax forward (CUDA)");
+}
+```
+</assistant>

@@ -1,0 +1,282 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void fused_bn_relu_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    const float* running_mean,
+    const float* running_var,
+    float* output,
+    int size) {
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float normalized = (input[idx] - running_mean[idx]) * rsqrtf(running_var[idx] + 1e-5f);
+        output[idx] = weight[idx] * normalized + bias[idx] * maxf(0.0f, normalized);
+    }
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    auto size = x.numel();
+    auto output = torch::empty_like(x);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    fused_bn_relu_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        running_mean.data_ptr<float>(),
+        running_var.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    
+    return output;
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    elementwise_add_kernel<<<num_blocks, block_size>>>(
+        a.data_ptr<float>(),
+        b.data_ptr<float>(),
+        out.data_ptr<float>(),
+        size
+    );
+    
+    return out;
+}
+
+torch::Tensor fused_bn_relu_cuda(
+    torch::Tensor x,
+    torch::Tensor weight

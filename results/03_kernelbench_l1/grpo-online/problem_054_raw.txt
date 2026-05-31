@@ -1,0 +1,131 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D convolution with manual loop unrolling
+__global__ void conv3d_unroll_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int in_depth,
+    int in_width,
+    int in_height,
+    int out_channels,
+    int k_d,
+    int k_w,
+    int k_h,
+    int stride,
+    int padding) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * out_channels * in_depth * in_width * in_height;
+    if (idx < total) {
+        // Decode output indices
+        int w_out = idx % in_width;
+        int temp = idx / in_width;
+        int h_out = temp % in_depth;
+        temp /= in_depth;
+        int c_out = temp % out_channels;
+        int b = temp / out_channels;
+
+        float sum = bias[c_out];
+
+        // Loop over input channels
+        for (int c_in = 0; c_in < in_channels; c_in++) {
+            int input_offset = b * (in_channels * in_depth * in_width * in_height) + c_in * (in_depth * in_width * in_height);
+            int weight_offset = c_in * (out_channels * k_d * k_w * k_h) + c_out * (k_d * k_w * k_h);
+
+            // Manually unrolled loop for 3x3 kernel
+            #pragma unroll
+            for (int kd = 0; kd < 3; kd++) {
+                int d_in = h_out + padding - kd;
+                if (d_in >= 0 && d_in < in_depth) {
+                    int in_d_offset = input_offset + d_in * (in_width * in_height);
+                    #pragma unroll
+                    for (int kw = 0; kw < 3; kw++) {
+                        int w_in = w_out + padding - kw;
+                        if (w_in >= 0 && w_in < in_width) {
+                            int in_w_offset = in_d_offset + w_in * in_height;
+                            #pragma unroll
+                            for (int h = 0; h < 3; h++) {
+                                int h_in = h_out + padding - h;
+                                if (h_in >= 0 && h_in < in_depth) {
+                                    int in_h_offset = in_w_offset + h_in;
+                                    int weight_h_offset = weight_offset + h_in * (k_w * k_h) + kd * (k_w * k_h) + kw;
+                                    sum += input[in_h_offset] * weight[weight_h_offset];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding) {
+
+    TORCH_CHECK(x.is_cuda(), "x must be a CUDA tensor");
+    TORCH_CHECK(weight.is_cuda(), "weight must be a CUDA tensor");
+    TORCH_CHECK(bias.is_cuda(), "bias must be a CUDA tensor");
+    TORCH_CHECK(x.dim() == 4, "x must be 4D");
+    TORCH_CHECK(weight.dim() == 4, "weight must be 4D");
+    TORCH_CHECK(bias.dim() == 1, "bias must be 1D");
+
+    int batch_size = x.size(0);
+    int in_channels = x.size(1);
+    int in_depth = x.size(2);
+    int in_width = x.size(3);
+    int in_height = x.size(4);
+    int out_channels = weight.size(0);
+    int k_d = weight.size(2);
+    int k_w = weight.size(3);
+    int k_h = weight.size(4);
+
+    int out_depth = (in_depth - 1) * stride - 2 * padding + k_d;
+    int out_width = (in_width - 1) * stride - 2 * padding + k_w;
+    int out_height = (in_height - 1) * stride - 2 * padding + k_h;
+
+    auto output = torch::empty({batch_size, out_channels, out_depth, out_width, out_height}, x.options());
+
+    int total = batch_size * out_channels * out_depth * out_width * out_height;
+    int threads = 256;
+    int blocks = (total + threads - 1) / threads;
+
+    conv3d_unroll_kernel<<<blocks, threads>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        in_depth,
+        in_width,
+        in_height,
+        out_channels,
+        k_d,
+        k_w,
+        k_h,
+        stride,
+        padding
+    );
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "3D convolution with loop unrolling (CUDA)");
+}
+```
+</assistant>

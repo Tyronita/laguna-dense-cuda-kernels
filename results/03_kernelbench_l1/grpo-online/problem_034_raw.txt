@@ -1,0 +1,76 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) { out[idx] = a[idx] + b[idx];
+    }
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+torch::Tensor instance_norm_cuda(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    
+    x = x.contiguous();
+    weight = weight.contiguous();
+    bias = bias.contiguous();
+    running_mean = running_mean.contiguous();
+    running_var = running_var.contiguous();
+
+    const int N = x.size(0);
+    const int C = x.size(1);
+    const int H = x.size(2);
+    const int W = x.size(3);
+
+    // Compute mean and variance
+    const float mean = running_mean[C] / (H * W);
+    const float var = running_var[C] / (H * W) + 1e-5;
+
+    // Launch one block per channel
+    const int threads = 256;
+    const int blocks = C;
+
+    for (int c = 0; c < C; c++) {
+        const float inv_std = rsqrtf(var - mean * mean);
+        const float scale = weight[c] * inv_std;
+        const float shift = bias[c] - mean * mean;
+        
+        const int offset = c * (N * H * W);
+        
+        for (int i = 0; i < N * H * W; i += threads) {
+            const int idx = offset + i;
+            x[idx] = scale * (x[idx] - mean) + shift;
+        }
+    }
+    
+    return x;
+}
+
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    torch::Tensor running_mean,
+    torch::Tensor running_var) {
+    return instance_norm_cuda(x, weight, bias, running_mean, running_var);
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "Instance Normalization with optimized CUDA");
+}
+```
+</assistant>

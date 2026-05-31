@@ -1,0 +1,138 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D convolution with manual loop unrolling
+__global__ void conv3d_unroll_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int batch_size,
+    int in_channels,
+    int depth,
+    int width,
+    int height,
+    int out_channels,
+    int kernel_size,
+    int stride,
+    int padding) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * out_channels * (depth - 1) * (width - 1) * (height - 1);
+    if (idx < total) {
+        // Decode output indices
+        int d_out = (depth - 1) * (width - 1) * (height - 1);
+        int w_out = d_out / (height * width);
+        int h_out = d_out % (height * width);
+        int c_out = (d_out / (width * height)) % out_channels;
+        int b = idx / (out_channels * d_out);
+        int c_in = idx % (out_channels * d_out);
+
+        float sum = bias[c_out];
+
+        // Loop over input channels
+        for (int c_in = 0; c_in < in_channels; c_in++) {
+            // Loop over kernel dimensions
+            for (int k = 0; k < kernel_size; k++) {
+                for (int kh = 0; kh < kernel_size; kh++) {
+                    for (int hw = 0; hw < kernel_size; hw++) {
+                        int d_in = d_out + padding - k + kh;
+                        int w_in = w_out + padding - k + hw;
+                        if (d_in >= 0 && d_in < depth && w_in >= 0 && w_in < width && h_in >= 0 && h_in < height) {
+                            int input_idx = b * (in_channels * depth * width * height) + c_in * (depth * width * height) + d_in * (width * height) + w_in * height + h_in;
+                            int weight_idx = c_in * (out_channels * kernel_size * kernel_size) + c_out * (kernel_size * kernel_size) + k * (kernel_size * kernel_size) + kh * kernel_size + hw;
+                            sum += input[input_idx] * weight[weight_idx];
+                        }
+                    }
+                }
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+// Forward function for 3D convolution
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding) {
+
+    TORCH_CHECK(x.is_cuda(), "Input must be a CUDA tensor");
+    TORCH_CHECK(weight.is_cuda(), "Weight must be a CUDA tensor");
+    TORCH_CHECK(bias.is_cuda(), "Bias must be a CUDA tensor");
+
+    int batch_size = x.size(0);
+    int in_channels = x.size(1);
+    int depth = x.size(2);
+    int width = x.size(3);
+    int height = x.size(4);
+
+    int out_channels = weight.size(0);
+    int kernel_size = weight.size(2);
+    int kwh = weight.size(3);
+
+    TORCH_CHECK(kernel_size == 3, "Kernel size must be 3");
+    TORCH_CHECK(kwh == 3, "Kernel width must be 3");
+
+    int out_depth = (depth - 1) * stride - 2 * padding + 1;
+    int out_width = (width - 1) * stride - 2 * padding + 1;
+    int out_height = (height - 1) * stride - 2 * padding + 1;
+
+    TORCH_CHECK(out_depth > 0, "Output depth must be positive");
+    TORCH_CHECK(out_width > 0, "Output width must be positive");
+    TORCH_CHECK(out_height > 0, "Output height must be positive");
+
+    auto output = torch::empty({batch_size, out_channels, out_depth, out_width, out_height}, x.options());
+
+    int total = batch_size * out_channels * (out_depth - 1) * (out_width - 1) * (out_height - 1);
+    int block_size = 256;
+    int num_blocks = (total + block_size - 1) / block_size;
+
+    conv3d_unroll_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size,
+        in_channels,
+        depth,
+        width,
+        height,
+        out_channels,
+        kernel_size,
+        kwh,
+        padding
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

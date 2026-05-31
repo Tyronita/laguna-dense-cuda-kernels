@@ -1,0 +1,51 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) { out[idx] = a[idx] + b[idx];
+    }
+}
+
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+torch::Tensor exclusive_cumsum_cuda(torch::Tensor x, int dim) {
+    auto x_contiguous = x.contiguous();
+    auto zeros = torch::zeros_like(x_contiguous.select(dim, 0).unsqueeze(dim));
+    auto concat = torch::cat(zones, x_contiguous);
+    return torch::sum(torch::clamp(torch::max(torch::min(torch::sum(torch::cumsum(concat, dim) - 1)), 0.0), 1e-5), dim)
+}
+
+torch::Tensor forward(torch::Tensor x, int dim) {
+    return exclusive_cumsum_cuda(x, dim);
+}"""
+
+cpp_source = """torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b);\ntorch::Tensor exclusive_cumsum_cuda(torch::Tensor x, int dim);\ntorch::Tensor forward(torch::Tensor x, int dim);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['elementwise_add_cuda', 'exclusive_cumsum_cuda', 'forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.elementwise_add_cuda(x)

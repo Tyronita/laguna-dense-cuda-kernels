@@ -1,0 +1,39 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void diag_matmul_kernel(const float* A, const float* B, float* C, int N, int M) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N * M) {
+        int row = idx / M;
+        int col = idx % M;
+        C[idx] = A[row] * B[idx];
+    }
+}
+
+torch::Tensor diag_matmul_cuda(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.dim() == 1, "A must be a 1D tensor");
+    TORCH_CHECK(B.dim() == 2, "B must be a 2D tensor");
+    TORCH_CHECK(A.size(0) == B.size(0), "A and B must have the same number of rows");
+    TORCH_CHECK(A.size(0) == B.size(1), "A and B must have the same number of columns");
+
+    int N = A.size(0);
+    int M = B.size(1);
+    auto C = torch::empty_like(B);
+
+    const int block_size = 256;
+    const int num_blocks = (N * M + block_size - 1) / block_size;
+
+    diag_matmul_kernel<<<num_blocks, block_size>>>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), N, M);
+    cudaError_t err = cudaGetLastError();
+    TORCH_CHECK(err == cudaSuccess, "Kernel failed: ", cudaGetErrorString(err));
+
+    return C;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &diag_matmul_cuda, "Diagonal matmul with diagonal elementwise multiplication (CUDA)");
+}
+```
+</assistant>

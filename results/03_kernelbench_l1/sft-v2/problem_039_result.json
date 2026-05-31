@@ -1,0 +1,9 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "/data/.torch_extensions/custom_ops/custom_ops.so: undefined symbol: _Z20elementwise_add_cudaN2at6TensorES0_",
+  "problem_id": 39
+}

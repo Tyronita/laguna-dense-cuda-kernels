@@ -1,0 +1,38 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for Tanh activation using warp-level reduction
+__global__ void tanh_kernel(const float* input, float* output, int size) {
+    extern __shared__ float shared_mem[];
+    int tid = threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float val = input[idx];
+        // Compute tanh using fast math
+        output[idx] = tanhf(val);
+    }
+}
+
+// C++ interface exposed to PyTorch
+torch::Tensor tanh_cuda(torch::Tensor input) {
+    auto size = input.numel();
+    auto output = torch::empty_like(input);
+    const int threads = 256;
+    const int blocks = (size + threads - 1) / threads;
+    // Launch kernel with shared memory for warp-level reduction
+    tanh_kernel<<<blocks, threads, threads * sizeof(float)>>>(
+        input.data_ptr<float>(),
+        output.data_ptr<float>(),
+        size
+    );
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &tanh_cuda, "Tanh activation (CUDA)");
+}
+```
+</assistant>

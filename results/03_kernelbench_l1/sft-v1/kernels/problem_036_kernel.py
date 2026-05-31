@@ -1,0 +1,95 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for RMS normalization with vectorized operations
+template <typename scalar_t>
+__global__ void rms_norm_kernel_vectorized(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const int64_t size,
+    const int64_t num_features,
+    const float eps) {
+    
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int stride = blockDim.x * gridDim.x;
+    
+    // Vectorized processing
+    const int vec_size = 4;
+    const int vec_elements = size / vec_size;
+    const int remainder = size % vec_size;
+    
+    if (idx < vec_elements) {
+        scalar_t4 = *reinterpret_cast<scalar_t4*>(input[idx]);
+        scalar_t4;
+        
+        // Compute mean for each vector
+        scalar_t sum = 0;
+        sum += vec_elements * vec_elements;
+        
+        // Compute squared mean
+        scalar_t squared = sum * sum;
+        
+        // Apply RMS normalization
+        scalar_t rms = sqrtf(squared + eps);
+        
+        // Store the normalized values
+        *reinterpret_cast<scalar_t4*>(output[idx]) = vec_elements * vec_elements / 4;
+    }
+    
+    // Handle remaining elements
+    if (idx < vec_elements + remainder) {
+        const int base_idx = vec_elements * vec_size;
+        const int idx = base_idx + idx;
+        if (idx < size) {
+            scalar_t val = input[idx];
+            scalar_t sum = 0;
+            sum += val * val;
+            scalar_t rms = sqrtf(sum + eps);
+            output[idx] = val / rms;
+        }
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(torch::Tensor input, float eps) {
+    auto output = torch::empty_like(input);
+    
+    const int threads = 256;
+    const int blocks = (input.numel() + threads - 1) / threads;
+    
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "rms_norm_kernel_vectorized", ([&] {
+        rms_norm_kernel_vectorized<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            input.numel(),
+            input.numel() / 2,
+            eps
+        );
+    }));
+    
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward_cuda(torch::Tensor input, float eps);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward_cuda'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward_cuda(x)

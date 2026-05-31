@@ -1,0 +1,177 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for elementwise addition with optimized block size
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA function for elementwise addition
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise multiplication with optimized block size
+__global__ void elementwise_mul_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] * b[idx];
+    }
+}
+
+// Custom CUDA function for elementwise multiplication
+torch::Tensor elementwise_mul_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_mul_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise ReLU with optimized block size
+__global__ void elementwise_relu_kernel(const float* a, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] > 0.0f ? a[idx] : 0.0f;
+    }
+}
+
+// Custom CUDA function for elementwise ReLU
+torch::Tensor elementwise_relu_cuda(torch::Tensor a) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_relu_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Custom CUDA kernel for elementwise addition with optimized block size
+__global__ void elementwise_add_kernel(const float* a, const float* b, float* out, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// Custom CUDA function for elementwise addition
+torch::Tensor elementwise_add_cuda(torch::Tensor a, torch::Tensor b) {
+    auto size = a.numel();
+    auto out = torch::zeros_like(a);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    elementwise_add_kernel<<<num_blocks, block_size>>>(a.data_ptr<float>(), b.data_ptr<float>(), out.data_ptr<float>(), size);
+    return out;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+                               int64_t stride,
+                               int64_t padding,
+                               int64_t dilation) {
+    // Perform depthwise convolution
+    x = torch::conv2d(x, weight, bias, stride, padding, dilation);
+    
+    // Apply ReLU using custom CUDA kernel
+    x = elementwise_relu_cuda(x);
+    
+    // Perform pointwise convolution
+    x = torch::conv2d(x, weight, bias, 1, 1, 1, 1);
+    
+    return x;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+                               int64_t stride,
+                               int64_t padding,
+                               int64_t dilation) {
+    // Perform depthwise convolution
+    x = torch::conv2d(x, weight, bias, stride, padding, dilation);
+    
+    // Apply ReLU using custom CUDA kernel
+    x = elementwise_relu_cuda(x);
+    
+    // Perform pointwise convolution
+    x = torch::conv2d(x, weight, bias, 1, 1, 1, 1);
+    
+    return x;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+                               int64_t stride,
+                               int64_t padding,
+                               int64_t dilation) {
+    // Perform depthwise convolution
+    x = torch::conv2d(x, weight, bias, stride, padding, dilation);
+    
+    // Apply ReLU using custom CUDA kernel
+    x = elementwise_relu_cuda(x);
+    
+    // Perform pointwise convolution
+    x = torch::conv2d(x, weight, bias, 1, 1, 1, 1);
+    
+    return x;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+                               int64_t stride,
+                               int64_t padding,
+                               int64_t dilation) {
+    // Perform depthwise convolution
+    x = torch::conv2d(x, weight, bias, stride, padding, dilation);
+    
+    // Apply ReLU using custom CUDA kernel
+    x = elementwise_relu_cuda(x);
+    
+    // Perform pointwise convolution
+    x = torch::conv2d(x, weight, bias, 1, 1, 1, 1);
+    
+    return x;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+                               int64_t stride,
+                               int64_t padding,
+                               int64_t dilation) {
+    // Perform depthwise convolution
+    x = torch::conv2d(x, weight, bias, stride, padding, dilation);
+    
+    // Apply ReLU using custom CUDA kernel
+    x = elementwise_relu_cuda(x);
+    
+    // Perform pointwise convolution
+    x = torch::conv2d(x, weight, bias, 1, 1, 1, 1);
+    
+    return x;
+}
+
+// Optimized 2D convolution with fused elementwise addition and ReLU
+torch::Tensor optimized_conv2d(torch::Tensor x,
+                               torch::Tensor weight,
+                               torch::Tensor bias,
+      

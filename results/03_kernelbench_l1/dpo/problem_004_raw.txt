@@ -1,0 +1,59 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for matrix-vector multiplication with loop unrolling
+__global__ void matvec_mul_kernel(const float* A, const float* B, float* C, int M, int K) {
+    int row = blockIdx.x;
+    if (row < M) {
+        float sum = 0.0f;
+        // Unroll loop by 4 for better performance
+        int k = 0; k < K; k += 4;
+        #pragma unroll
+        for (; k <= row * K - 4; k += 4) {
+            sum += A[row * K + k] * B[k];
+            sum += A[row * K + k + 1] * B[k + 1];
+            sum += A[row * K + k + 2] * B[k + 2];
+            sum += A[row * K + k + 3] * B[k + 3];
+        }
+        // Handle remaining elements
+        for (; k < K; k++) {
+            sum += A[row * K + k] * B[k];
+        }
+        C[row] = sum;
+    }
+}
+
+// C++ interface exposed via PyBind11
+torch::Tensor matvec_mul_cuda(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.dim() == 2, "A must be a 2D tensor");
+    TORCH_CHECK(B.dim() == 2, "B must be a 2D tensor");
+    TORCH_CHECK(A.size(1) == B.size(0), "A and B must have same K dimension");
+    TORCH_CHECK(A.is_cuda() && B.is_cuda(), "Inputs must be on CUDA");
+    TORCH_CHECK(A.is_contiguous() && B.is_contiguous(), "Inputs must be contiguous");
+
+    int M = A.size(0);
+    int K = A.size(1);
+    auto C = torch::empty({M}, A.options());
+
+    const int threads = 256;
+    const int blocks = (M + threads - 1) / threads;
+
+    matvec_mul_kernel<<<blocks, threads>>>(
+        A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, K
+    );
+
+    cudaError_t err = cudaGetLastError();
+    TORCH_CHECK(err == cudaSuccess, "Kernel failed: ", cudaGetErrorString(err));
+
+    return C;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &matvec_mul_cuda, "Matrix-Vector Multiplication (CUDA) with loop unrolling");
+}
+```
+</assistant>

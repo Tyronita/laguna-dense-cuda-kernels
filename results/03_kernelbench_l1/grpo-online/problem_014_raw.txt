@@ -1,0 +1,45 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void triangular_mm_kernel(const float* A, const float* B, float* C, int N) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < N && col < N) {
+        if (row < col) {
+            C[row * N + col] = 0.0f;
+        } else {
+            float sum = 0.0f;
+            for (int k = col; k <= row; ++k) {
+                sum += A[row * N + k] * B[k * N + col];
+            }
+            C[row * N + col] = sum;
+        }
+    }
+}
+
+torch::Tensor triangular_mm_cuda(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.is_cuda() && B.is_cuda(), "Inputs must be on CUDA");
+    TORCH_CHECK(A.dim() == 2 && B.dim() == 2, "Inputs must be 2D");
+    TORCH_CHECK(A.size(0) == A.size(1) && B.size(0) == B.size(1), "Inputs must be square");
+    TORCH_CHECK(A.size(0) == B.size(0), "Inputs must be same size");
+
+    int N = A.size(0);
+    auto C = torch::zeros_like(A);
+
+    const int block_size = 16;
+    dim3 grid((N + block_size - 1) / block_size, (N + block_size - 1) / block_size);
+    triangular_mm_kernel<<<grid, block_size>>>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), N);
+
+    cudaError_t err = cudaGetLastError();
+    TORCH_CHECK(err == cudaSuccess, "Kernel failed: ", cudaGetErrorString(err));
+
+    return C;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &triangular_mm_cuda, "Upper triangular matrix multiplication (CUDA)");
+}
+```
+</assistant>

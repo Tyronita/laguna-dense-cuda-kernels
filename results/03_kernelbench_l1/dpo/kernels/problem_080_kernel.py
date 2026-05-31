@@ -1,0 +1,122 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 2D convolution with stride, padding, dilation
+// Each block processes one output element (n, c, h, w)
+__global__ void conv2d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int N, int in_channels, int H, int W,
+    int out_channels, int kH, int kW,
+    int stride, int padding, int dilation) {
+
+    // Compute output dimensions
+    int h_out = (H - 1) * stride - 2 * padding + kH * dilation;
+    int w_out = (W - 1) * stride - 2 * padding + kW * dilation;
+
+    // Each block corresponds to one output element
+    int index = blockIdx.x;
+    int n = index / (out_channels * h_out * w_out);
+    int rem = index % (out_channels * h_out * w_out);
+    int c = rem / (h_out * w_out);
+    int hw = rem % (h_out * w_out);
+    int w = hw / h_out;
+
+    float sum = bias[c];
+
+    // Loop over input channels and kernel elements
+    for (int ic = 0; ic < in_channels; ic++) {
+        for (int kh = 0; kh < kH; kh++) {
+            for (int kw = 0; kw < kW; kw++) {
+                int in_h = h_out - padding + kh * dilation;
+                int in_w = w_out - padding + kw * dilation;
+                if (in_h >= 0 && in_h < H && in_w >= 0 && in_w < W) {
+                    int input_idx = n * (in_channels * H * W) + ic * (H * W) + in_h * W + in_w;
+                    int weight_idx = c * (in_channels * kH * kW) + ic * (kH * kW) + kh * kW + kw;
+                    sum += input[input_idx] * weight[weight_idx];
+                }
+            }
+        }
+    }
+    output[index] = sum;
+}
+
+// The forward function exposed via PyBind11
+torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation) {
+
+    TORCH_CHECK(x.is_cuda(), "x must be a CUDA tensor");
+    TORCH_CHECK(weight.is_cuda(), "weight must be a CUDA tensor");
+    TORCH_CHECK(bias.is_cuda(), "bias must be a CUDA tensor");
+    TORCH_CHECK(x.dim() == 4, "x must be 4D");
+    TORCH_CHECK(weight.dim() == 4, "weight must be 4D");
+    TORCH_CHECK(bias.dim() == 1, "bias must be 1D");
+
+    int N = x.size(0);
+    int in_channels = x.size(1);
+    int H = x.size(2);
+    int W = x.size(3);
+    int out_channels = weight.size(0);
+    int kH = weight.size(2);
+    int kW = weight.size(3);
+
+    // Compute output dimensions
+    int h_out = (H - 1) * stride - 2 * padding + kH * dilation;
+    int w_out = (W - 1) * stride - 2 * padding + kW * dilation;
+    TORCH_CHECK(h_out > 0, "Output height must be positive");
+    TORCH_CHECK(w_out > 0, "Output width must be positive");
+
+    auto output = torch::empty({N, out_channels, h_out, w_out}, x.options());
+    int total = N * out_channels * h_out * w_out;
+    int block_size = 256;
+    int num_blocks = (total + block_size - 1) / block_size;
+
+    conv2d_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        N, in_channels, H, W,
+        out_channels, kH, kW,
+        stride, padding, dilation
+    );
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor forward(
+    torch::Tensor x,
+    torch::Tensor weight,
+    torch::Tensor bias,
+    int64_t stride,
+    int64_t padding,
+    int64_t dilation);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['forward'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, x):
+        return custom_ops.forward(x)

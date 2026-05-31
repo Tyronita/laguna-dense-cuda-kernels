@@ -1,0 +1,100 @@
+
+</think>
+```cpp
+#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for 2D convolution with stride and padding
+// This kernel uses grid-stride loops to handle larger workloads
+// and ensures that all threads in the grid cover the entire output elements.
+
+template <typename scalar_t>
+__global__ void conv2d_stride_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ input,
+    const scalar_t* __restrict__ weight,
+    const scalar_t* __restrict__ bias,
+    const int64_t stride,
+    const int64_t padding,
+    const int64_t in_channels,
+    const int64_t in_height,
+    const int64_t in_width,
+    const int64_t kernel_height,
+    const int64_t kernel_width) {
+
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int total_elements = in_height * in_width * in_channels;
+    if (idx >= total_elements) return;
+
+    // Calculate the output coordinates
+    const int w = idx % in_width;
+    const int h = (idx / in_width) % in_height;
+    const int c = (idx / (in_width * in_height)) % in_channels;
+
+    // Calculate the input coordinates
+    const int in_w = (w + padding) % kernel_width;
+    const int in_h = (h + padding) % kernel_height;
+
+    // Check if in_w and in_h are valid
+    if (in_w < 0 || in_h < 0) {
+        const int in_idx = ((h * in_width + in_w) * in_channels + c);
+        const int out_idx = ((h * in_width + in_w) * in_channels + c);
+        const scalar_t* input_ptr = input + in_idx;
+        const scalar_t* weight_ptr = weight + c * kernel_height * kernel_width + in_h * kernel_width + in_w;
+        const scalar_t* bias_ptr = bias + c;
+        scalar_t sum = 0;
+        for (int kh = 0; kh < kernel_height; ++kh) {
+            for (int kw = 0; kw < kernel_width; ++kw) {
+                sum += input_ptr[kh * in_width + kw] * weight_ptr[kh * kernel_width + kw];
+            }
+        }
+        output[out_idx] = sum + bias_ptr;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor forward_cuda(
+    torch::Tensor input,
+    int64_t stride,
+    int64_t padding,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    const int64_t in_channels = input.size(0);
+    const int64_t in_height = input.size(1);
+    const int64_t in_width = input.size(2);
+
+    const int64_t kernel_height = weight.size(1);
+    const int64_t kernel_width = weight.size(2);
+
+    auto output = torch::empty({in_height, in_width, in_channels}, input.options());
+
+    const int threads = 256;
+    const int total_elements = in_height * in_width * in_channels;
+    const int blocks = (total_elements + threads - 1) / threads;
+
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "conv2d_stride_kernel", ([&] {
+        conv2d_stride_kernel<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            weight.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            stride,
+            padding,
+            in_channels,
+            in_height,
+            in_width,
+            kernel_height,
+            kernel_width
+        );
+    }));
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward_cuda, "2D convolution with stride and padding (CUDA)");
+}
+```
+</assistant>

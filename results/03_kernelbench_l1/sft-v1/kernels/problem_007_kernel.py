@@ -1,0 +1,77 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+cuda_source = """#include <torch/extension.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+// CUDA kernel for matrix multiplication with loop unrolling
+template <typename scalar_t>
+__global__ void matmul_unroll_kernel(
+    scalar_t* __restrict__ output,
+    const scalar_t* __restrict__ A,
+    const scalar_t* __restrict__ B,
+    const int M,
+    const int N,
+    const int K) {
+    
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    if (row < M && col < N) {
+        scalar_t sum = 0;
+        #pragma unroll
+        for (int k = 0; k < K; ++k) {
+            sum += A[row * K + k] * B[k * N + col];
+        }
+        output[row * N + col] = sum;
+    }
+}
+
+// PyTorch wrapper function
+torch::Tensor matmul_cuda_unroll(torch::Tensor A, torch::Tensor B) {
+    const int M = A.size(0);
+    const int K = A.size(1);
+    const int N = B.size(1);
+
+    auto options = torch::TensorOptions()
+        .dtype(A.dtype())
+        .device(A.device());
+    auto output = torch::empty({M, N}, options);
+
+    const int threads = 16;
+    dim3 threads(threads, threads);
+    dim3 blocks((M + threads - 1) / threads,
+                (N + threads - 1) / threads);
+
+    AT_DISPATCH_FLOATING_TYPES(A.type(), "matmul_unroll_kernel", ([&] {
+        matmul_unroll_kernel<scalar_t><<<blocks, threads>>>(
+            output.data_ptr<scalar_t>(),
+            A.data_ptr<scalar_t>(),
+            B.data_ptr<scalar_t>(),
+            M, N, K
+        );
+    }));
+
+    return output;
+}"""
+
+cpp_source = """torch::Tensor matmul_cuda_unroll(torch::Tensor A, torch::Tensor B);"""
+
+custom_ops = load_inline(
+    name="custom_ops",
+    cpp_sources=cpp_source,
+    cuda_sources=cuda_source,
+    functions=['matmul_cuda_unroll'],
+    verbose=False,
+    extra_cflags=["-O3"],
+    extra_cuda_cflags=["-O3"],
+)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+
+    def forward(self, A, B):
+        return custom_ops.matmul_cuda_unroll(A, B)

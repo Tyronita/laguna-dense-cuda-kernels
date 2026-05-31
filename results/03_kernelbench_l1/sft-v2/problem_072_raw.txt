@@ -1,0 +1,118 @@
+
+```cpp
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+// Custom CUDA kernel for 3D transposed convolution with stride, padding, and output_padding.
+// This kernel assumes input shape (N, in_channels, D_in, H_in, W_in) and output shape (N, out_channels, D_out, H_out, W_out).
+// It computes one output element per (n, oc) slice using a loop over the input channels and kernel spatial dimensions.
+
+__global__ void conv_transpose3d_kernel(
+    const float* input,
+    const float* weight,
+    const float* bias,
+    float* output,
+    int N, int in_channels, int D_in, int H_in, int W_in,
+    int out_channels, int D_out, int H_out, int W_out,
+    int kD, int kH, int kW,
+    int strideD, int strideH, int strideW,
+    int padD, int padH, int padW,
+    int out_padD, int out_padH, int out_padW) {
+
+    // Each block corresponds to one (n, oc) slice
+    int slice_idx = blockIdx.x;  // slice index
+    int n = slice_idx / out_channels;
+    int oc = slice_idx % out_channels;
+
+    // Each thread computes one output element
+    int d_out = blockIdx.y * blockDim.y + threadIdx.y;
+    int h_out = blockIdx.z * blockDim.z + threadIdx.z;
+    int w_out = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (d_out < D_out && h_out < H_out && w_out < W_out) {
+        float sum = 0.0f;
+        // Loop over input channels and kernel spatial dimensions
+        for (int c = 0; c < in_channels; c++) {
+            for (int kd = 0; kd < kD; kd++) {
+                for (int kh = 0; kh < kH; kh++) {
+                    for (int kw = 0; kw < kW; kw++) {
+                        // Compute input position with stride and padding
+                        int d_in = d_out - padD + kd - strideD;
+                        int h_in = h_out - padH + kh - strideH;
+                        int w_in = w_out - padW + kw - strideW;
+                        if (d_in >= 0 && d_in < D_in && h_in >= 0 && h_in < H_in && w_in >= 0 && w_in < W_in) {
+                            // Index for input tensor: (n, c, d_in, h_in, w_in)
+                            int input_idx = n * (in_channels * D_in * H_in * W_in) + c * (D_in * H_in * W_in) + d_in * (H_in * W_in) + h_in * W_in + w_in;
+                            // Index for weight tensor: (oc, c, kd, kh, kw)
+                            int weight_idx = oc * (in_channels * kD * kH * kW) + c * (kD * kH * kW) + kd * (kH * kW) + kh * kW + kw;
+                            sum += input[input_idx] * weight[weight_idx];
+                        }
+                    }
+                }
+            }
+        }
+        // Add bias
+        sum += bias[oc];
+        // Write output
+        int output_idx = n * (out_channels * D_out * H_out * W_out) + oc * (D_out * H_out * W_out) + d_out * (H_out * W_out) + h_out * W_out + w_out;
+        output[output_idx] = sum;
+    }
+}
+
+// The forward function exposed via PyBind11.
+// Input: x of shape (N, in_channels, D_in, H_in, W_in)
+// Returns: output of shape (N, out_channels, D_out, H_out, W_out)
+
+torch::Tensor forward(
+    torch::Tensor x,
+    int64_t stride,
+    int64_t padding,
+    int64_t output_padding,
+    torch::Tensor weight,
+    torch::Tensor bias) {
+
+    // Get dimensions
+    int N = x.size(0);
+    int in_channels = x.size(1);
+    int D_in = x.size(2);
+    int H_in = x.size(3);
+    int W_in = x.size(4);
+
+    int out_channels = weight.size(0);
+    int kD = weight.size(2);
+    int kH = weight.size(3);
+    int kW = weight.size(4);
+
+    // Compute output dimensions
+    int D_out = (D_in - 1) * stride + 2 * padding + output_padding - 1 * kD;
+    int H_out = (H_in - 1) * stride + 2 * padding + output_padding - 1 * kH;
+    int W_out = (W_in - 1) * stride + 2 * padding + output_padding - 1 * kW;
+
+    // Allocate output tensor
+    auto output = torch::empty({N, out_channels, D_out, H_out, W_out}, x.options());
+
+    // Define block and grid sizes
+    const int threads = 16;
+    dim3 blocks(N * out_channels, (D_out + threads - 1) / threads, (H_out + threads - 1) / threads);
+
+    // Launch the custom CUDA kernel
+    conv_transpose3d_kernel<<<blocks, dim3(threads, threads, threads)>>>(
+        x.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        output.data_ptr<float>(),
+        N, in_channels, D_in, H_in, W_in,
+        out_channels, D_out, H_out, W_out,
+        kD, kH, kW,
+        stride, padding, output_padding,
+        bias.data_ptr<float>()
+    );
+
+    return output;
+}
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("forward", &forward, "3D transposed convolution with stride, padding, and output_padding (CUDA)");
+}
+```
+</assistant>

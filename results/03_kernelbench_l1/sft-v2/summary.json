@@ -1,0 +1,10 @@
+{
+  "model": "laguna-xs2-dense-k8-cuda-sft-v2",
+  "compiled": 21,
+  "correct": 0,
+  "compile_rate": 0.21,
+  "correct_rate": 0.0,
+  "faster": 0,
+  "avg_speedup": 0,
+  "total": 100
+}
