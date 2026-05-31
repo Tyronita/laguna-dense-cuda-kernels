@@ -228,3 +228,8 @@ RADLADS (arXiv:2505.03005) · Pruning & Distilling MoE into Dense (arXiv:2605.28
 Sakana AI CUDA Engineer / robust-kbench (arXiv:2509.14279) · KernelBench · DeepSeek-R1 GRPO (arXiv:2501.12948) · Dr.GRPO · DAPO.
 
 *Built at the Poolside Laguna XS.2 research hackathon.*
+
+## Reproduction & provenance
+- **[docs/REPRODUCE.md](docs/REPRODUCE.md)** — full end-to-end reproduction with checkpointing, plus deep guides for **GRPO** and **DPO**.
+- **[docs/PROVENANCE.md](docs/PROVENANCE.md)** — who-introduced-what (verified from commits) with code samples and paper provenance (incl. DO-ACP / KRAFTON / RADLADS).
+- **[training/](training/)** — the ported end-to-end training scripts + data mixtures.
