@@ -38,7 +38,7 @@ factors (≈0 extra memory), so the full 39-layer run fits on 80 GB. See `--opti
 
 ## 1. Stage 0 — build dense student + DO-ACP warm-start
 ```bash
-python scripts/0000_build_dense_placeholder.py \
+python scripts/000_build_dense_placeholder.py \
     --source-model poolside/Laguna-XS.2 --k-routed 8 \
     --target-dir outputs/laguna-dense-k8-copied-shell
 ```
@@ -49,7 +49,7 @@ down-proj). *Checkpoint:* one final dir; no intermediate steps. Push as
 
 ## 2. Stage 1 — reconstruction (the distillation core)
 ```bash
-python scripts/0001_train_dense_reconstruction.py \
+python scripts/001_train_dense_reconstruction.py \
     --teacher-model poolside/Laguna-XS.2 \
     --student-model outputs/laguna-dense-k8-copied-shell \
     --datasets "GPUMODE/KernelBook:0.40,nvidia/OpenCodeInstruct:0.30,SakanaAI/AI-CUDA-Engineer-Archive:0.20:level_1,ppbhatt500/kernelbook-triton-multiturn-reasoning-traces:0.10" \
@@ -65,12 +65,12 @@ steps. **Resume** by pointing `--student-model` at the latest `checkpoint-step-N
 `EvanOLeary/laguna-xs2-dense-k8-recon` (`…-kernelmix` for the V2 mix).
 
 ## 3. Stage 3 — SFT (two mixes)
-**Mix A — general recovery** (`scripts/0002_sft_general.py`, OpenCodeInstruct, seq 8192, lr
+**Mix A — general recovery** (`scripts/002_sft_general.py`, OpenCodeInstruct, seq 8192, lr
 5e-5, 500 steps, `--train-norms --train-lm-head`, optional `--kd-*` logit-KD). Supports
 `--resume-from-checkpoint` and periodic eval (`--eval-every`).
-**Mix B — CUDA** (`scripts/0002_sft_cuda.py`):
+**Mix B — CUDA** (`scripts/002_sft_cuda.py`):
 ```bash
-python scripts/0002_sft_cuda.py \
+python scripts/002_sft_cuda.py \
     --student-model EvanOLeary/laguna-xs2-dense-k8-kernelmix \
     --dataset SakanaAI/AI-CUDA-Engineer-Archive --splits level_1,level_2 \
     --max-steps 400 --seq-len 2048 --grad-accum-steps 8 --learning-rate 1e-5 \
@@ -82,7 +82,7 @@ starting point _and_ the frozen reference** for both.
 
 ---
 
-## 4. Deep guide — GRPO (`scripts/0003_grpo.py`)
+## 4. Deep guide — GRPO (`scripts/003_grpo.py`)
 
 **What it is.** Online RL with a *verifiable* reward (RLVR): for each task, sample **G** kernels,
 score each by actually compiling + running it, and push the policy toward the above-average
@@ -98,7 +98,7 @@ with no reward spread), with a **KL anchor** to the frozen SFT model.
 5. Per sample: `loss = −(adv · logπ / n_tok) + β·KL(π‖π_ref)`, `β=0.02`; backprop; clip 1.0; step.
 
 ```bash
-python scripts/0003_grpo.py \
+python scripts/003_grpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --group-size 6 --max-new-tokens 400 \
     --lr 1e-6 --kl-beta 0.02 --temperature 0.9 --steps 30 \
@@ -126,7 +126,7 @@ dominated by compilation, not the GPU.
 
 ---
 
-## 5. Deep guide — DPO (`scripts/0004_dpo.py`)
+## 5. Deep guide — DPO (`scripts/004_dpo.py`)
 
 **What it is.** *Offline* preference learning — no live compilation. It mines the Sakana
 archive's evolutionary trajectory: per task, **prefer the correct + fastest kernel over an
@@ -145,7 +145,7 @@ L = −log σ(Δ)
 Reference = the frozen SFT model (implicit KL anchor); trainable = `routed_dense + lm_head`.
 
 ```bash
-python scripts/0004_dpo.py \
+python scripts/004_dpo.py \
     --model outputs/sft_cuda/checkpoint-final \
     --splits level_1,level_2 --max-tasks 200 --pairs-per-task 8 \
     --beta 0.1 --lr 5e-7 --steps 300 --max-len 1536 \

@@ -213,16 +213,36 @@ order-dependent, contaminated results. **Compile + run each kernel in its own su
 
 ---
 
-## 10 · Repo contents
-| Path | What |
+## 10 · Repo layout — the `000–004` pipeline (CUDA post-training separated)
+
+The numbered pipeline reads top-to-bottom. **Stages 0–1 are the densification core** (shared with
+the [cm2435 research repo](https://github.com/cm2435/laguna-xs2-expert-coactivation-scheduling));
+**stages 2–4 + reward + eval are the CUDA-focused post-training** that is the point of *this* repo.
+
+**① Densification core** (MoE → dense)
+| Script | Stage | Trains |
+|---|---|---|
+| `scripts/000_build_dense_placeholder.py` | build + DO-ACP warm-start (`--init {random,selected-concat}`) | — |
+| `scripts/001_train_dense_reconstruction.py` | teacher-forced reconstruction | `routed_dense` |
+| `src/densify/{densify_layer,reconstruction,dense_checkpoint/*}.py` | DO-ACP + reconstruction + dense-model defn | — |
+
+**② CUDA post-training** ⭐ *(the CUDA-focused work)*
+| Script | Stage | Trains |
+|---|---|---|
+| `scripts/002_sft_general.py` · `scripts/002_sft_cuda.py` | SFT (general / Sakana CUDA) | `routed_dense + lm_head + norms` |
+| `scripts/003_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO; **isolated-parallel reward**) | `routed_dense + lm_head` |
+| `scripts/003_rft_offline.py` | offline RFT on Sakana traces | `routed_dense + lm_head` |
+| `scripts/004_dpo.py` | DPO (correct+fast ≻ incorrect/slow) | `routed_dense + lm_head` |
+| `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + **`reward_for_text_isolated`** (subprocess) | — |
+
+**③ CUDA eval & ablations**
+| Script | What |
 |---|---|
-| `scripts/0002_sft_cuda.py` | CUDA SFT (PyTorch→CUDA, correct kernels, chat-formatted) |
-| `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + Triton eval, timeout-guarded |
-| `scripts/0003_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO dynamic sampling + KL anchor) |
-| `scripts/eval_worker.py` + `eval_10ops_isolated.py` | **isolated** KernelBench-Lite eval |
+| `scripts/eval_worker.py` · `scripts/kernelbench_lite_eval.py` · `eval_10ops_isolated.py` | **isolated** KernelBench-Lite eval (subprocess per kernel) |
 | `scripts/head_to_head.py` | ours vs teacher (tok/s + correctness) |
-| `scripts/ablate_api_hint.py` / `ablate_triton.py` | prompt ablations (CUDA / Triton) |
-| `docs/GRAPHS.md` · `docs/ABLATIONS.md` · `docs/reports/` | all graphs · ablation log · expert report |
+| `scripts/ablate_api_hint.py` · `ablate_triton.py` | prompt ablations (CUDA / Triton) |
+
+**Docs** · [`TRAINING_PROVENANCE`](docs/TRAINING_PROVENANCE.md) (per-stage trainable params) · [`INVESTIGATION_GENERAL_METHOD`](docs/INVESTIGATION_GENERAL_METHOD.md) (random vs lift-and-shift, confirmed) · [`REPRODUCE`](docs/REPRODUCE.md) (GRPO/DPO deep guides) · [`PROVENANCE`](docs/PROVENANCE.md) · [`GRAPHS`](docs/GRAPHS.md) · [`ABLATIONS`](docs/ABLATIONS.md) · **[consolidation/PR plan →](docs/PR_PLAN.md)**
 
 ## 11 · Next — RFT (GRPO/RLVR)
 Sample G kernels/prompt → reward = **compile + correct + speedup** (via `robust-kbench`) → Dr.GRPO
