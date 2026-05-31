@@ -1,0 +1,38 @@
+--- /mnt/data2/vllm_dense_venv/lib/python3.10/site-packages/vllm/model_executor/models/laguna.py.orig	2026-05-31 21:18:02.971338669 +0000
++++ /mnt/data2/vllm_dense_venv/lib/python3.10/site-packages/vllm/model_executor/models/laguna.py	2026-05-31 21:18:02.992338971 +0000
+@@ -117,6 +117,23 @@
+         return x
+ 
+ 
++
++class LagunaDenseFFN(nn.Module):
++    """Dense replacement for the routed MoE block in the DENSIFIED Laguna student."""
++    def __init__(self, config, quant_config=None, prefix="", enable_eplb=False):
++        super().__init__()
++        h = config.hidden_size
++        routed = config.num_experts_per_tok * config.moe_intermediate_size
++        self.routed_dense = LagunaMLP(h, routed, config.hidden_act, quant_config,
++                                      prefix=f"{prefix}.routed_dense")
++        self.shared_experts = LagunaMLP(h, config.shared_expert_intermediate_size,
++                                        config.hidden_act, quant_config,
++                                        prefix=f"{prefix}.shared_experts")
++        self.scale = float(getattr(config, "moe_routed_scaling_factor", 1.0))
++    def forward(self, x):
++        return self.routed_dense(x) * self.scale + self.shared_experts(x)
++
++
+ class LagunaMoE(nn.Module):
+     """Sparse MoE block for Laguna with optional shared expert and sigmoid routing.
+ 
+@@ -515,7 +532,10 @@
+             and ((layer_idx + 1) % config.decoder_sparse_step == 0)
+         )
+ 
+-        if self.is_moe_layer:
++        if self.is_moe_layer and getattr(config, "model_type", "") == "laguna_dense":
++            self.mlp = LagunaDenseFFN(config=config, quant_config=quant_config,
++                                      prefix=f"{prefix}.mlp")
++        elif self.is_moe_layer:
+             self.mlp = LagunaMoE(
+                 config=config,
+                 quant_config=quant_config,

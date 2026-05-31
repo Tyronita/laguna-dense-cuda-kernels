@@ -1,53 +1,78 @@
-# Inference optimization — measured (tok/s + TTFT) & serving-backend support
+# Inference optimization — measured (tok/s + TTFT) & serving backends
 
 **Model:** `EvanOLeary/laguna-xs2-dense-k8-cuda-grpo` (~3.0 B dense). **HW:** A100 80 GB.
-**Measurement:** single sequence (batch 1), 77-token prompt, greedy, 128 new tokens; `decode` =
-steady-state tok/s (excludes prefill), `TTFT` = prefill + first token. *(Run under GPU contention
-with a separate 67 GB teacher job — the **ratios** are solid; absolute tok/s ≈ ±10 %.)*
+**Greedy, 77-token prompt.** `decode` = steady-state tok/s; `TTFT` = prefill + first token.
 
 ## Results
 
-| Backend | TTFT | decode tok/s | vs eager | Notes |
+| Backend | TTFT | single-seq decode | batched throughput | correctness |
 |---|---|---|---|---|
-| **HF transformers, bf16 eager** | 71 ms | **15.4** | 1.0× | baseline (`attn_implementation="sdpa"`) |
-| **HF transformers + `torch.compile`** | **44 ms** | **32.9** | **2.1×** | `mode="default"` ✅ · **`max-autotune` ❌** (CUDA-graphs vs `generate` cache → `RuntimeError: accessing tensor overwritten by CUDAGraphs`) |
-| **vLLM 0.22 (native + transformers backend)** | — | — | — | ❌ **does not load** — see below |
-| **SGLang** | — | — | — | not installed; **same blocker expected** |
+| HF transformers, bf16 **eager** | 71 ms | 15.4 tok/s | — | ✅ valid CUDA |
+| HF transformers **+ `torch.compile`** (`mode="default"`) | **44 ms** | **32.9 tok/s (2.1×)** | — | ✅ |
+| **vLLM 0.22 (dense plugin, `enforce_eager`)** | 51 ms | 21.6 tok/s | **see below** | ✅ valid CUDA |
 
-**Headline:** **`torch.compile(mode="default")` ≈ 2.1× decode** (15.4 → 32.9 tok/s) and **−38 % TTFT**
-(71 → 44 ms), zero accuracy change. Use it for offline GRPO rollouts / batch eval today.
+`torch.compile(mode="default")` ✅ = **2.1×** single-seq (`max-autotune` ❌ — CUDA-graphs clash with `generate`).
 
-## Why vLLM (and SGLang) don't serve our model yet
-vLLM 0.22 **has a native `laguna.py`** — but it implements the **MoE teacher**, not our **dense
-student**. Two failure modes, both structural:
-1. **Native path** (`vllm/model_executor/models/laguna.py`): expects original-Laguna config fields
-   the dense config omits — first `qkv_bias` (injectable via `hf_overrides`), then `decoder_sparse_step`,
-   i.e. it wants to build **256-expert MoE** layers.
-2. **Transformers backend** (`model_impl="transformers"`): builds `TransformersMoEForCausalLM` and
-   then fails to load weights — our checkpoint has `model.layers.N.mlp.routed_dense.{gate,up,down}_proj`
-   but vLLM looks for the MoE structure `mlp.experts.w13_weight / w2_weight / gate.weight`:
-   > `ValueError: no module named 'model.layers.1.mlp.routed_dense' … available: {experts.w13_weight, experts.w2_weight, gate.weight, shared_experts.*}`
+### vLLM batched throughput (the real win — continuous batching)
+| batch | aggregate tok/s | per-req | vs HF eager |
+|---|---|---|---|
+| 1 | 21.4 | 21.4 | 1.4× |
+| 8 | 161 | 20.2 | 10× |
+| 32 | 621 | 19.4 | 40× |
+| **64** | **1227** | 19.2 | **~80×** |
 
-**Root cause:** the config still advertises `num_experts=256` / `model_type=laguna`, so every vLLM path
-constructs the **MoE** FFN, which doesn't match our **dense** `routed_dense` weights.
+**Takeaways:** for **single sequences**, HF + `torch.compile` (32.9 tok/s) is fastest. For
+**throughput** (GRPO rollouts = G samples × many prompts; serving), **vLLM wins decisively** —
+**~1227 tok/s at batch 64** (≈80× HF eager, ≈37× HF-compile). Use HF+compile for one-off generation,
+vLLM for rollout/eval fleets.
 
-## What we can do (paths to vLLM/SGLang serving)
-- **(A) Small vLLM model plugin for `laguna_dense`** *(recommended, ~80–120 LoC).* Copy vLLM's
-  `laguna.py`, replace the MoE block (router + `FusedMoE` experts) with **one dense `MergedColumnParallelLinear`
-  gate/up + `RowParallelLinear` down (SwiGLU) = `routed_dense`** + the kept shared expert; register it
-  as architecture `LagunaDenseForCausalLM`. Keeps attention (GQA 48/64 + SWA + QK-norm + `g_proj`) from
-  the native impl. → unlocks paged-attention + continuous batching (the real throughput win).
-- **(B) Config surgery so vLLM sees a plain dense model** — drop/zero the MoE fields and expose
-  `routed_dense` as a standard MLP via the transformers backend. Lower-effort but fragile (the
-  custom attention may still need the plugin).
-- **SGLang:** same plugin model applies (per-arch model file); install only after (A)/(B) proves the
-  weight mapping. Not worth installing for the generic HF fallback (same MoE-vs-dense mismatch).
+## Getting vLLM to serve the DENSE student
+vLLM 0.22 ships a native `laguna.py` — but it's the **MoE teacher** (builds 256-expert FFNs and
+can't load our `routed_dense` weights). The fix is a **~20-line, `model_type`-gated** addition that
+reuses vLLM's native `LagunaMLP` and **leaves OG Laguna untouched** (`model_type=="laguna"` keeps the
+real `LagunaMoE`):
 
-## Recommended stack today
+```python
+# in vllm/model_executor/models/laguna.py
+class LagunaDenseFFN(nn.Module):                       # dense replacement of the routed MoE block
+    def __init__(self, config, quant_config=None, prefix="", enable_eplb=False):
+        super().__init__()
+        h = config.hidden_size
+        routed = config.num_experts_per_tok * config.moe_intermediate_size   # 8*512 = 4096
+        self.routed_dense   = LagunaMLP(h, routed, config.hidden_act, quant_config, prefix=f"{prefix}.routed_dense")
+        self.shared_experts = LagunaMLP(h, config.shared_expert_intermediate_size, config.hidden_act, quant_config, prefix=f"{prefix}.shared_experts")
+        self.scale = float(getattr(config, "moe_routed_scaling_factor", 1.0))  # 2.5
+    def forward(self, x):
+        return self.routed_dense(x) * self.scale + self.shared_experts(x)
+
+# in LagunaDecoderLayer.__init__, BEFORE the existing MoE branch:
+if self.is_moe_layer and getattr(config, "model_type", "") == "laguna_dense":
+    self.mlp = LagunaDenseFFN(config=config, quant_config=quant_config, prefix=f"{prefix}.mlp")
+elif self.is_moe_layer:
+    self.mlp = LagunaMoE(...)        # OG Laguna unchanged
+```
+
+Run it with:
+```python
+LLM(model="EvanOLeary/laguna-xs2-dense-k8-cuda-grpo", trust_remote_code=True,
+    hf_overrides={"mlp_only_layers":[0], "decoder_sparse_step":1, "qkv_bias":False},
+    enforce_eager=True)   # native attention (GQA 48/64 + SWA + QK-norm + g_proj) is reused as-is
+# env: VLLM_USE_FLASHINFER_SAMPLER=0  (the flashinfer sampler JIT-fails on this CUDA stack)
+```
+**Two gotchas that cost us:** ① the **chat prompt must use `tokenizer.apply_chat_template`** (a
+hand-written template → degenerate output); ② **flashinfer sampler** fails to JIT-compile → disable it.
+
+> ⚠️ **Do this in an isolated venv** (`/mnt/data2/vllm_dense_venv`) — the shared `kb-eval-venv` vLLM
+> is used by another workstream for the **OG Laguna MoE**; never patch its `laguna.py` globally. The
+> `model_type` guard makes the change safe to **upstream** properly.
+
+**SGLang:** same one-file model approach (a `routed_dense + shared` block + `load_weights`); not yet done.
+
+## Recommended stack
 | Use case | Recipe |
 |---|---|
-| **Offline GRPO rollouts / eval (batch)** | HF transformers + **`torch.compile(mode="default")`** (2.1×) |
-| **Memory-constrained / on-device** | **HQQ 4-bit** (~1.7 GB) or **torchao int8** (3.21 GB, byte-identical) — see [`QUANTIZATION.md`](QUANTIZATION.md) |
-| **High-throughput serving** | **write the `laguna_dense` vLLM plugin (A)** — not available out-of-the-box |
+| One-off generation | HF + **`torch.compile(mode="default")`** (2.1×, 32.9 tok/s) |
+| **GRPO rollouts / eval / serving** | **vLLM + the `laguna_dense` patch** (~1227 tok/s @ batch 64) |
+| Memory-constrained / on-device | **HQQ 4-bit** (~1.7 GB) / **torchao int8** (3.21 GB) — [`QUANTIZATION.md`](QUANTIZATION.md) |
 
-*Reproduce: `scripts` `bench_hf.py` (transformers + compile) and `vllm_try.py` (vLLM loader probe).*
+*Reproduce: `scripts/bench_inference_hf.py` (HF + compile), `scripts/bench_vllm_dense.py` (single-seq), `scripts/bench_vllm_batch.py` (throughput).*
