@@ -88,6 +88,8 @@ Full analysis: [gist (C4)](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70
 
 ---
 
+![Architecture comparison](docs/figures/architecture_comparison.png)
+
 ## 2 · Architecture
 
 **2,996,678,656 params (~3.0 B), 5.99 GB bf16.** Each sparse layer's 256-expert MoE → **one dense
