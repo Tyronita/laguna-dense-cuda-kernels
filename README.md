@@ -36,10 +36,17 @@ Before collapsing the MoE we measured how many of Laguna's **256 routed experts*
 | Mean per-layer coverage | 99.7% |
 | Load Gini (concentration) | **0.53** (peaks mid-stack) |
 
-The routed FFN behaves far **denser** than its 256-way capacity → a dense surrogate is viable, and
+The routed FFN behaves far **denser** than its 256-way capacity -> a dense surrogate is viable, and
 **K must exceed top-8**. This motivated **K=8 + DO-ACP warm-start**.
 
-**Per-dataset expert activation** (different code domains use different expert pools):
+![expert activation](docs/figures/expert_activation.png)
+
+### Per-dataset expert activation
+
+Different code domains activate very different expert pools. We profiled the frozen teacher on each
+dataset in our training mix:
+
+![expert pool by dataset](docs/figures/expert_activation_by_dataset_pool.png)
 
 | Dataset | Kind | Eff. experts/layer | Gini | Expert pool / batch |
 |---|---|---|---|---|
@@ -52,12 +59,22 @@ The routed FFN behaves far **denser** than its 256-way capacity → a dense surr
 | **cuda_kernels** | **CUDA src** | **100** | **0.683** | **12.3B (39%)** |
 
 Kernel/CUDA code concentrates onto ~100-108 experts (39-42% of routed weights) vs ~158-183 for
-general text (62-72%). This means a kernel-focused batch touches **half the expert weights** of a
-general batch -- exactly the overhead that MoE-to-dense collapse removes.
+general text (62-72%). A kernel-focused batch touches **half the expert weights** of a general
+batch -- exactly the overhead that MoE->dense collapse removes.
 
-![expert activation](docs/figures/expert_activation.png)
+**Expert activation grids** (16x16, 256 experts -- brighter = more active):
 
-Full analysis: [gist (C4)](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · [gist (per-dataset: KernelBook/CUDA/Magicoder/SWE-bench)](https://gist.github.com/Tyronita/d472e5664dc8291a1dab83f9f3d73fd5) · [gist (C4 detailed visualisations)](https://gist.github.com/Tyronita/cdcb80969d208b83e3f48cddfbbb1422) · `docs/reports/expert-activation-c4.md`.
+| C4 (web text, baseline) | KernelBook (Triton) | CUDA kernels |
+|---|---|---|
+| ![c4](docs/figures/expert_grid_c4.png) | ![kernelbook](docs/figures/expert_grid_kernelbook.png) | ![cuda](docs/figures/expert_grid_cuda_kernels.png) |
+
+| Magicoder (NL instruct) | SWE-bench (NL problem) | OpenCodeInstruct |
+|---|---|---|
+| ![magicoder](docs/figures/expert_grid_magicoder.png) | ![swebench](docs/figures/expert_grid_swebench.png) | ![opencodeinstruct](docs/figures/expert_grid_opencodeinstruct.png) |
+
+![summary](docs/figures/expert_activation_by_dataset_summary.png)
+
+Full analysis: [gist (C4)](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · [gist (per-dataset)](https://gist.github.com/Tyronita/d472e5664dc8291a1dab83f9f3d73fd5) · [gist (C4 detailed)](https://gist.github.com/Tyronita/cdcb80969d208b83e3f48cddfbbb1422) · `docs/reports/expert-activation-c4.md`.
 
 ---
 
@@ -90,21 +107,35 @@ poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
    ▼ Stage 3b DPO (preference pairs from Sakana traces)        → cuda-dpo
 ```
 
-### Stage 0 — DO-ACP warm-start
-Gram log-det criterion selects the 8 most informative experts per layer → concatenated into one dense
-SwiGLU FFN. This gives the reconstruction a much better starting point than random init.
+### Stage 0 — DO-ACP warm-start ()
 
-### Stage 1 — Reconstruction (kernel mixture, V2)
+**DO-ACP** (Data-Optimal Activation-Covariance Pruning) selects which experts to keep:
+1. Run a calibration set through the frozen MoE teacher
+2. For each layer, collect the **activation covariance matrix** of each expert's output
+3. Score subsets of K=8 experts by the **log-determinant of the Gram matrix** of their combined outputs — this measures how much of the output space the subset spans
+4. Select the 8 experts per layer that maximise this log-det (greedy search)
+5. **Concatenate** their SwiGLU weights into one dense FFN (width = K × 512 = 4096)
+
+This gives the reconstruction a much better starting point than random init — the dense FFN
+starts as the optimal linear combination of the teacher’s most informative experts.
+Deep-layer MSE improves by ~26% vs random init.
+
+### Stage 1 — Reconstruction (kernel mixture, V2) (`scripts/001_train_dense_reconstruction.py`)
 Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output.
 
 | | Value |
 |---|---|
-| **Loss** | `mean_ℓ( MSE/mean(yℓ²) + 0.05·(1−cos) )` — normalized MSE + cosine alignment |
+| **Loss** | `mean_ℓ( MSE/mean(yℓ²) + 0.05·(1-cos) )` -- see below |
 | **Trainable** | `routed_dense` only (0.98 B) |
 | **Optimizer** | Adafactor, lr 2e-4 |
 | Steps / tokens | 2000 / ~8.2 M |
 | Result | Loss 0.67 → **0.16**, deep-layer MSE 0.20 → **0.018** |
 | Hardware | 1× H100, ~35 min |
+
+**Loss function detail:**
+
+All 39 sparse layers train **in parallel** — gradient flows to each layer’s  independently.
+Attention, embeddings, and norms are frozen.
 
 **Training data (kernel mixture):**
 
@@ -118,7 +149,7 @@ Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output.
 ![v2 reconstruction](docs/figures/v2_training.png)
 ![v2 per-layer heatmap](docs/figures/v2_layer_heatmap.png)
 
-### Stage 2 — SFT (CUDA kernel generation)
+### Stage 2 — SFT (CUDA kernel generation) (`scripts/002_sft_cuda.py`)
 
 | | Value |
 |---|---|
@@ -132,7 +163,7 @@ Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output.
 
 ![sft curve](docs/figures/sft_curve.png)
 
-### Stage 3a — GRPO-online (Dr.GRPO + live compilation)
+### Stage 3a — GRPO-online (Dr.GRPO + live compilation) (`scripts/003_grpo.py`)
 
 Per prompt, sample 6 kernels → **actually compile + run** each in a subprocess → reward from verification.
 
@@ -147,7 +178,7 @@ Per prompt, sample 6 kernels → **actually compile + run** each in a subprocess
 | LR / temperature | 1e-6 / 0.9 |
 | Tasks | elementwise ops (relu, sigmoid, tanh, gelu, silu, softplus) |
 
-### Stage 3b — DPO (preference pairs)
+### Stage 3b — DPO (preference pairs) (`scripts/004_dpo.py`)
 
 | | Value |
 |---|---|
@@ -374,9 +405,12 @@ plugin that reuses `LagunaMLP`. Patch + run command: [`docs/INFERENCE.md`](docs/
 
 | Path | What |
 |---|---|
-| `scripts/sft_kernel.py` | CUDA SFT training |
-| `scripts/grpo_kernel.py` | GRPO-online (Dr.GRPO + DAPO + live compilation) |
-| `scripts/dpo_sakana.py` | DPO on Sakana preference pairs |
+| `scripts/000_build_dense_placeholder.py` | DO-ACP warm-start (expert selection + dense FFN init) |
+| `scripts/001_train_dense_reconstruction.py` | Teacher-forced reconstruction (MSE+cos loss) |
+| `scripts/002_sft_cuda.py` | CUDA SFT (PyTorch->CUDA, correct kernels, chat-formatted) |
+| `scripts/003_grpo.py` | GRPO-online (Dr.GRPO + DAPO + live compilation) |
+| `scripts/003_grpo_offline.py` | GRPO-offline (Dr.GRPO on Sakana dataset rewards) |
+| `scripts/004_dpo.py` | DPO on Sakana preference pairs |
 | `src/densify/kernel_reward.py` | Verifiable reward (parse→compile→correct→speedup) |
 | `scripts/eval_worker.py` | Subprocess-isolated kernel evaluator |
 | `scripts/kernelbench_l1_eval.py` | Full KernelBench L1 evaluation pipeline |
