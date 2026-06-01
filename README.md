@@ -135,18 +135,36 @@ Deep-layer MSE improves by ~26% vs random init.
 Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output.
 
 | | Value |
+| | Value |
 |---|---|
-| **Loss** | `mean_ℓ( MSE/mean(yℓ²) + 0.05·(1-cos) )` -- see below |
-| **Trainable** | `routed_dense` only (0.98 B) |
-| **Optimizer** | Adafactor, lr 2e-4 |
+| **Loss** | Normalized MSE + cosine alignment (see source below) |
+| **Trainable** | `routed_dense` only (0.98B) -- all other params frozen |
+| **Optimizer** | Adafactor, lr 2e-4 (zero extra state -- fits on 80GB) |
+| **Sequence length** | 2048 tokens |
+| **Batch size** | 1 (with grad accumulation as needed) |
+| **Precision** | bf16 mixed (teacher + student) |
+| **Input** | Tokenised text from kernel mixture, fed through both teacher and student |
+| **Mechanism** | Per layer: capture teacher MoE output via hook, run student dense FFN on same input, minimise difference |
 | Steps / tokens | 2000 / ~8.2 M |
-| Result | Loss 0.67 → **0.16**, deep-layer MSE 0.20 → **0.018** |
-| Hardware | 1× H100, ~35 min |
+| Result | Loss 0.67 -> **0.16**, deep-layer MSE 0.20 -> **0.018** |
+| Hardware | 1x H100 80GB, ~35 min |
 
-**Loss function detail:**
+**Loss function** (from [`src/densify/reconstruction.py`](src/densify/reconstruction.py)):
+```python
+for layer_id in layer_ids:               # all 39 sparse layers, in parallel
+    x      = teacher_inputs[layer_id]    # MoE block input (captured via hook)
+    target = teacher_outputs[layer_id]   # what the 256-expert MoE produces
+    pred   = student_mlp(x)              # what the single dense SwiGLU FFN produces
 
-All 39 sparse layers train **in parallel** — gradient flows to each layer’s  independently.
-Attention, embeddings, and norms are frozen.
+    mse  = masked_mean((pred - target).pow(2).mean(dim=-1))
+    loss = mse / (target.pow(2).mean() + 1e-6)   # normalize by target energy
+    cos  = 1 - F.cosine_similarity(pred, target, dim=-1)
+    loss = loss + 0.05 * cos                       # + direction alignment
+
+total_loss = stack(layer_losses).mean()             # average across 39 layers
+```
+Each layer's `routed_dense` gets its own gradient. The 39 dense FFNs train independently.
+Teacher is frozen; only student dense FFNs update.
 
 **Training data (kernel mixture):**
 
@@ -164,13 +182,19 @@ Attention, embeddings, and norms are frozen.
 
 | | Value |
 |---|---|
-| **Data** | [`SakanaAI/AI-CUDA-Engineer-Archive`](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) (~30,615 rows, `Correct==True` only) |
-| **Format** | chat: `system + user(PyTorch)` → `assistant(CUDA-C++)`, prompt masked |
-| **Loss** | Cross-entropy on CUDA completion |
-| **Trainable** | `routed_dense` + `lm_head` + norms (1.19 B) |
-| **Optimizer** | AdamW 1e-5, grad-clip 1.0, grad-accum 8, seq 2048 |
-| Steps / tokens | 400 / ~3.5 M |
-| Result | **CE 0.675 → 0.21**; emits working CUDA + restores chat format |
+| **Data** | [`SakanaAI/AI-CUDA-Engineer-Archive`](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) (~30,615 rows) |
+| **Filter** | `Correct==True` only (verified kernels) |
+| **Splits** | `level_1` + `level_2` (v1); + `level_3` for v2 |
+| **Input columns** | `PyTorch_Code_Module` (prompt) -> `CUDA_Code` (target) |
+| **System prompt** | *"You are an expert GPU kernel engineer. Convert PyTorch modules into correct, optimized CUDA kernels."* |
+| **Chat format** | Laguna template: `<system>` + `<user>` (PyTorch in python block) -> `<assistant>` (CUDA in cpp block) |
+| **Loss** | Causal LM cross-entropy on assistant (CUDA) span only -- prompt is masked |
+| **Trainable** | `routed_dense` + `lm_head` + norms (1.19B) |
+| **Optimizer** | AdamW, lr=1e-5, grad-clip 1.0 |
+| **Batch** | grad-accum 8, seq len 2048 |
+| **Precision** | bf16, gradient checkpointing enabled |
+| Steps / tokens | 400 / ~3.5M (v1) -> +500 / ~4.4M (v2 continued from v1) |
+| Result | **CE 0.675 -> 0.21**; emits working CUDA + restores chat format |
 
 ![sft curve](docs/figures/sft_curve.png)
 
