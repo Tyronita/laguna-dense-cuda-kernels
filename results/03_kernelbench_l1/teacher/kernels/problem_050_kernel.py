@@ -1,0 +1,85 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.cpp_extension import load_inline
+
+conv2d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+template<typename T>
+__global__ void conv2d_kernel(const T* input, const T* weight, T* output,
+                              int N, int C_in, int H_in, int W_in,
+                              int C_out, int H_out, int W_out,
+                              int kH, int kW, int stride, int pad_h, int pad_w) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = N * C_out * H_out * W_out;
+    if (idx >= total) return;
+
+    int n = idx / (C_out * H_out * W_out);
+    int c_out = (idx / (H_out * W_out)) % C_out;
+    int h_out = (idx / W_out) % H_out;
+    int w_out = idx % W_out;
+
+    int h_in_start = h_out * stride - pad_h;
+    int w_in_start = w_out * stride - pad_w;
+
+    T sum = 0;
+    for (int kh = 0; kh < kH; kh++) {
+        for (int kw = 0; kw < kW; kw++) {
+            int h_in = h_in_start + kh;
+            int w_in = w_in_start + kw;
+            if (h_in >= 0 && h_in < H_in && w_in >= 0 && w_in < W_in) {
+                int weight_idx = ((c_out * kH + kh) * kW + kw);
+                int in_idx = ((n * C_in * H_in + h_in) * W_in + w_in);
+                sum += input[in_idx] * weight[weight_idx];
+            }
+        }
+    }
+    output[idx] = sum;
+}
+
+torch::Tensor conv2d_cuda(torch::Tensor input, torch::Tensor weight, int stride, int pad_h, int pad_w) {
+    auto N = input.size(0);
+    auto C_in = input.size(1);
+    auto H_in = input.size(2);
+    auto W_in = input.size(3);
+    auto C_out = weight.size(0);
+    auto kH = weight.size(2);
+    auto kW = weight.size(3);
+    auto H_out = (H_in + 2 * pad_h - kH) / stride + 1;
+    auto W_out = (W_in + 2 * pad_w - kW) / stride + 1;
+
+    auto output = torch::zeros({N, C_out, H_out, W_out}, input.options());
+    
+    const int block_size = 256;
+    const int total = N * C_out * H_out * W_out;
+    const int num_blocks = (total + block_size - 1) / block_size;
+    
+    conv2d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(), weight.data_ptr<float>(), output.data_ptr<float>(),
+        N, C_in, H_in, W_in, C_out, H_out, W_out, kH, kW, stride, pad_h, pad_w
+    );
+    return output;
+}
+"""
+
+conv2d_cpp_source = "torch::Tensor conv2d_cuda(torch::Tensor input, torch::Tensor weight, int stride, int pad_h, int pad_w);"
+
+conv2d = load_inline(
+    name="conv2d",
+    cpp_sources=conv2d_cpp_source,
+    cuda_sources=conv2d_source,
+    functions=["conv2d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    def __init__(self, num_classes=1000):
+        super(ModelNew, self).__init__()
+        self.conv1_weight = nn.Parameter(torch.randn(96, 3, 11, 11))
+        self.conv2d = conv2d
+
+    def forward(self, x):
+        x = self.conv2d.conv2d_cuda(x, self.conv1_weight, 4, 2, 2)
+        return x

@@ -1,0 +1,9 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "super(type, obj): obj must be an instance or subtype of type",
+  "problem_id": 94
+}

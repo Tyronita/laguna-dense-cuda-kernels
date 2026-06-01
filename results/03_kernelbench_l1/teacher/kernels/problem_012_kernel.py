@@ -1,0 +1,38 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+diagonal_matmul_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void diagonal_matmul_kernel(const float* diag, const float* B, float* out, int N, int M) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < N && col < M) {
+        out[row * M + col] = diag[row] * B[row * M + col];
+    }
+}
+
+torch::Tensor diagonal_matmul_cuda(torch::Tensor A, torch::Tensor B) {
+    auto N = A.size(0);
+    auto M = B.size(1);
+    auto out = torch::zeros({N, M}, A.options());
+    const int block_size_x = 16;
+    const int block_size_y = 16;
+    dim3 block(block_size_x, block_size_y);
+    dim3 grid((M + block_size_x - 1) / block_size_x, (N + block_size_y - 1) / block_size_y);
+    diagonal_matmul_kernel<<<grid, block>>>(A.data_ptr<float>(), B.data_ptr<float>(), out.data_ptr<float>(), N, M);
+    return out;
+}
+"""
+diagonal_matmul_cpp_source = "torch::Tensor diagonal_matmul_cuda(torch::Tensor A, torch::Tensor B);"
+diagonal_matmul = load_inline(name="diagonal_matmul", cpp_sources=diagonal_matmul_cpp_source, cuda_sources=diagonal_matmul_source, functions=["diagonal_matmul_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+        self.diagonal_matmul = diagonal_matmul
+
+    def forward(self, A, B):
+        return self.diagonal_matmul.diagonal_matmul_cuda(A, B)

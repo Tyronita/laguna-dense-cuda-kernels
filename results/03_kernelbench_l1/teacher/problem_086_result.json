@@ -1,0 +1,9 @@
+{
+  "compiled": false,
+  "correct": false,
+  "speedup": 0.0,
+  "kernel_ms": -1,
+  "ref_ms": -1,
+  "error": "Error building extension 'pointwise_conv2d': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=pointwise_conv2d -DTORCH_API_INCLUDE_EXTENSION_H -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include/torch/csrc/api/include -isystem /usr/local/cuda-12.6/include -isystem /usr/include/python3.10 -fPIC -std=c++17 -c /data/.torch_extensions/pointwise_conv2d/main.cpp -o main.o \n[2/3] /usr/local/cuda-12.6/bin/nvcc -M",
+  "problem_id": 86
+}

@@ -1,0 +1,100 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+layernorm_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <cmath>
+
+__global__ void layernorm_kernel(const float* input, float* output, float* mean, float* rstd, 
+                                  int batch_size, int normalized_size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * normalized_size;
+    
+    if (idx < batch_size) {
+        float sum = 0.0f;
+        for (int i = 0; i < normalized_size; i++) {
+            sum += input[idx * normalized_size + i];
+        }
+        mean[idx] = sum / normalized_size;
+    }
+    __syncthreads();
+    
+    if (idx < batch_size) {
+        float sum_sq = 0.0f;
+        for (int i = 0; i < normalized_size; i++) {
+            float diff = input[idx * normalized_size + i] - mean[idx];
+            sum_sq += diff * diff;
+        }
+        rstd[idx] = 1.0f / sqrtf(sum_sq / normalized_size + 1e-5f);
+    }
+    __syncthreads();
+    
+    if (idx < total_elements) {
+        int batch_idx = idx / normalized_size;
+        int feature_idx = idx % normalized_size;
+        output[idx] = (input[idx] - mean[batch_idx]) * rstd[batch_idx];
+    }
+}
+
+torch::Tensor layernorm_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias, int normalized_size) {
+    auto batch_size = input.size(0);
+    auto output = torch::empty_like(input);
+    auto mean = torch::zeros({batch_size}, input.options());
+    auto rstd = torch::zeros({batch_size}, input.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (batch_size + block_size - 1) / block_size;
+    
+    layernorm_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(),
+        output.data_ptr<float>(),
+        mean.data_ptr<float>(),
+        rstd.data_ptr<float>(),
+        batch_size,
+        normalized_size
+    );
+    
+    return output;
+}
+"""
+
+layernorm_cpp_source = "torch::Tensor layernorm_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias, int normalized_size);"
+
+layernorm = load_inline(
+    name="layernorm",
+    cpp_sources=layernorm_cpp_source,
+    cuda_sources=layernorm_source,
+    functions=["layernorm_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs Layer Normalization with custom CUDA operators.
+    """
+    def __init__(self, normalized_shape: tuple):
+        """
+        Initializes the LayerNorm layer.
+
+        Args:
+            normalized_shape (tuple): Shape of the input tensor to be normalized.
+        """
+        super(ModelNew, self).__init__()
+        self.normalized_shape = normalized_shape
+        self.weight = nn.Parameter(torch.ones(normalized_shape))
+        self.bias = nn.Parameter(torch.zeros(normalized_shape))
+        self.layernorm = layernorm
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Layer Normalization to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (*, normalized_shape).
+
+        Returns:
+            torch.Tensor: Output tensor with Layer Normalization applied, same shape as input.
+        """
+        return self.layernorm.layernorm_cuda(x, self.weight, self.bias, self.normalized_shape[0])

@@ -1,0 +1,43 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+l2_normalize_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void l2_normalize_kernel(const float* x, float* out, int batch_size, int dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * dim;
+    if (idx < total) {
+        int b = idx / dim;
+        int d = idx % dim;
+        float sum_sq = 0.0f;
+        for (int i = b * dim; i < (b + 1) * dim; i++) {
+            sum_sq += x[i] * x[i];
+        }
+        float norm = sqrtf(sum_sq) + 1e-12f;
+        out[idx] = x[idx] / norm;
+    }
+}
+
+torch::Tensor l2_normalize_cuda(torch::Tensor x) {
+    auto batch_size = x.size(0);
+    auto dim = x.size(1);
+    auto out = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (batch_size * dim + block_size - 1) / block_size;
+    l2_normalize_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), out.data_ptr<float>(), batch_size, dim);
+    return out;
+}
+"""
+l2_normalize_cpp_source = "torch::Tensor l2_normalize_cuda(torch::Tensor x);"
+l2_normalize = load_inline(name="l2_normalize", cpp_sources=l2_normalize_cpp_source, cuda_sources=l2_normalize_source, functions=["l2_normalize_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    def __init__(self):
+        super(ModelNew, self).__init__()
+        self.l2_normalize = l2_normalize
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.l2_normalize.l2_normalize_cuda(x)

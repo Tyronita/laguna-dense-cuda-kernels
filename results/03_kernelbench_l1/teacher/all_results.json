@@ -1,0 +1,900 @@
+[
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 1
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 2
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 3
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 4
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6478149100257069,
+    "kernel_ms": 7.78,
+    "ref_ms": 5.04,
+    "error": "",
+    "problem_id": 5
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 6
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.1722814498933902,
+    "kernel_ms": 46.9,
+    "ref_ms": 8.08,
+    "error": "",
+    "problem_id": 7
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.12694300518134716,
+    "kernel_ms": 193.0,
+    "ref_ms": 24.5,
+    "error": "",
+    "problem_id": 8
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.1826771653543307,
+    "kernel_ms": 25.4,
+    "ref_ms": 4.64,
+    "error": "",
+    "problem_id": 9
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 10
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 11
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 61.2,
+    "kernel_ms": 0.15,
+    "ref_ms": 9.18,
+    "error": "",
+    "problem_id": 12
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.1214046822742475,
+    "kernel_ms": 59.8,
+    "ref_ms": 7.26,
+    "error": "",
+    "problem_id": 13
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 1.0588235294117647,
+    "kernel_ms": 11.9,
+    "ref_ms": 12.6,
+    "error": "",
+    "problem_id": 14
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.2874015748031496,
+    "kernel_ms": 25.4,
+    "ref_ms": 7.3,
+    "error": "",
+    "problem_id": 15
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 16
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.029922178988326848,
+    "kernel_ms": 257.0,
+    "ref_ms": 7.69,
+    "error": "",
+    "problem_id": 17
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 18
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6461538461538462,
+    "kernel_ms": 11.7,
+    "ref_ms": 7.56,
+    "error": "",
+    "problem_id": 19
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.647008547008547,
+    "kernel_ms": 11.7,
+    "ref_ms": 7.57,
+    "error": "",
+    "problem_id": 20
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6291666666666667,
+    "kernel_ms": 12.0,
+    "ref_ms": 7.55,
+    "error": "",
+    "problem_id": 21
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.618032786885246,
+    "kernel_ms": 12.2,
+    "ref_ms": 7.54,
+    "error": "",
+    "problem_id": 22
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.5296167247386759,
+    "kernel_ms": 28.7,
+    "ref_ms": 15.2,
+    "error": "",
+    "problem_id": 23
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6229508196721312,
+    "kernel_ms": 24.4,
+    "ref_ms": 15.2,
+    "error": "",
+    "problem_id": 24
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 1.575,
+    "kernel_ms": 12.0,
+    "ref_ms": 18.9,
+    "error": "",
+    "problem_id": 25
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.5784615384615385,
+    "kernel_ms": 13.0,
+    "ref_ms": 7.52,
+    "error": "",
+    "problem_id": 26
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 27
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6406779661016948,
+    "kernel_ms": 11.8,
+    "ref_ms": 7.56,
+    "error": "",
+    "problem_id": 28
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.5806201550387597,
+    "kernel_ms": 12.9,
+    "ref_ms": 7.49,
+    "error": "",
+    "problem_id": 29
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 2.23728813559322,
+    "kernel_ms": 11.8,
+    "ref_ms": 26.4,
+    "error": "",
+    "problem_id": 30
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6461538461538462,
+    "kernel_ms": 11.7,
+    "ref_ms": 7.56,
+    "error": "",
+    "problem_id": 31
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.6461538461538462,
+    "kernel_ms": 11.7,
+    "ref_ms": 7.56,
+    "error": "",
+    "problem_id": 32
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 33
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'instance_norm'",
+    "problem_id": 34
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 35
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 36
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 37
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.19338235294117648,
+    "kernel_ms": 136.0,
+    "ref_ms": 26.3,
+    "error": "",
+    "problem_id": 38
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "evaluation timeout (300s)",
+    "problem_id": 39
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 40
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'maxpool1d'",
+    "problem_id": 41
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 42
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'maxpool3d'",
+    "problem_id": 43
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 44
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 45
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 46
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 47
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'mean_reduction'",
+    "problem_id": 48
+  },
+  {
+    "problem_id": 49,
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "error": "no code extracted"
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 50
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'argmax'",
+    "problem_id": 51
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'argmin'",
+    "problem_id": 52
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'min_reduction'",
+    "problem_id": 53
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv3d'",
+    "problem_id": 54
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 55
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 56
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose2d'",
+    "problem_id": 57
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose3d'",
+    "problem_id": 58
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv3d'",
+    "problem_id": 59
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv3d'",
+    "problem_id": 60
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "eval returned None",
+    "problem_id": 61
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 62
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "\"attribute 'bias' already exists\"",
+    "problem_id": 63
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 64
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose2d'",
+    "problem_id": 65
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv3d'",
+    "problem_id": 66
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 67
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose3d'",
+    "problem_id": 68
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "\"attribute 'bias' already exists\"",
+    "problem_id": 69
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose3d'",
+    "problem_id": 70
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 71
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "eval returned None",
+    "problem_id": 72
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'conv_transpose3d'",
+    "problem_id": 73
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 74
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 75
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 76
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 77
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 78
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 79
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: out of memory\nSearch for `cudaErrorMemoryAllocation' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 80
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 81
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 82
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 83
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Syntax error in custom generated code or ModelNew not found",
+    "problem_id": 84
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 85
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'pointwise_conv2d': [1/3] c++ -MMD -MF main.o.d -DTORCH_EXTENSION_NAME=pointwise_conv2d -DTORCH_API_INCLUDE_EXTENSION_H -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include -isystem /data/kb-eval-venv/lib/python3.10/site-packages/torch/include/torch/csrc/api/include -isystem /usr/local/cuda-12.6/include -isystem /usr/include/python3.10 -fPIC -std=c++17 -c /data/.torch_extensions/pointwise_conv2d/main.cpp -o main.o \n[2/3] /usr/local/cuda-12.6/bin/nvcc -M",
+    "problem_id": 86
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 87
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 88
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 89
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'cumprod'",
+    "problem_id": 90
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 91
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "evaluation timeout (300s)",
+    "problem_id": 92
+  },
+  {
+    "compiled": true,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "correctness check failed",
+    "problem_id": 93
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "super(type, obj): obj must be an instance or subtype of type",
+    "problem_id": 94
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'cross_entropy'",
+    "problem_id": 95
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "super(type, obj): obj must be an instance or subtype of type",
+    "problem_id": 96
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "Error building extension 'scaled_dot_product_attention'",
+    "problem_id": 97
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "super(type, obj): obj must be an instance or subtype of type",
+    "problem_id": 98
+  },
+  {
+    "compiled": true,
+    "correct": true,
+    "speedup": 0.8270925110132158,
+    "kernel_ms": 9.08,
+    "ref_ms": 7.51,
+    "error": "",
+    "problem_id": 99
+  },
+  {
+    "compiled": false,
+    "correct": false,
+    "speedup": 0.0,
+    "kernel_ms": -1,
+    "ref_ms": -1,
+    "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+    "problem_id": 100
+  }
+]

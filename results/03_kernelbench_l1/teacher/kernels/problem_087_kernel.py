@@ -1,0 +1,88 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+conv2d_pointwise_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void conv2d_pointwise_kernel(const float* input, const float* weight, const float* bias, float* output, 
+                                         int batch_size, int in_channels, int out_channels, int height, int width) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * out_channels * height * width;
+    if (idx < total_elements) {
+        int n = idx / (out_channels * height * width);
+        int oc = (idx / (height * width)) % out_channels;
+        int h = (idx / width) % height;
+        int w = idx % width;
+        
+        float sum = 0.0f;
+        for (int ic = 0; ic < in_channels; ic++) {
+            sum += input[n * in_channels * height * width + ic * height * width + h * width + w] * 
+                   weight[oc * in_channels + ic];
+        }
+        
+        if (bias != nullptr) {
+            sum += bias[oc];
+        }
+        
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor conv2d_pointwise_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias) {
+    auto batch_size = input.size(0);
+    auto in_channels = input.size(1);
+    auto out_channels = weight.size(0);
+    auto height = input.size(2);
+    auto width = input.size(3);
+    
+    auto output = torch::zeros({batch_size, out_channels, height, width}, input.options());
+    
+    const int block_size = 256;
+    const int total_elements = batch_size * out_channels * height * width;
+    const int num_blocks = (total_elements + block_size - 1) / block_size;
+    
+    const float* bias_ptr = bias.defined() ? bias.data_ptr<float>() : nullptr;
+    
+    conv2d_pointwise_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(), 
+        weight.data_ptr<float>(), 
+        bias_ptr,
+        output.data_ptr<float>(),
+        batch_size, in_channels, out_channels, height, width
+    );
+    
+    return output;
+}
+"""
+
+conv2d_pointwise_cpp_source = "torch::Tensor conv2d_pointwise_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias);"
+
+conv2d_pointwise = load_inline(
+    name="conv2d_pointwise",
+    cpp_sources=conv2d_pointwise_cpp_source,
+    cuda_sources=conv2d_pointwise_source,
+    functions=["conv2d_pointwise_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, bias: bool = False):
+        super(ModelNew, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.bias = bias
+        
+        # Initialize weights manually
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels))
+        if bias:
+            self.bias_tensor = nn.Parameter(torch.randn(out_channels))
+        else:
+            self.bias_tensor = None
+        
+        self.conv2d_pointwise = conv2d_pointwise
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bias_tensor = self.bias_tensor if self.bias else torch.Tensor()
+        return self.conv2d_pointwise.conv2d_pointwise_cuda(x, self.weight, bias_tensor)

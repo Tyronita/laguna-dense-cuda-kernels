@@ -1,0 +1,50 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+selu_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <cmath>
+
+__global__ void selu_kernel(const float* x, float* out, float alpha, float scale, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        float val = x[idx];
+        out[idx] = (val < 0) ? scale * alpha * (exp(val) - 1) : scale * val;
+    }
+}
+
+torch::Tensor selu_cuda(torch::Tensor x, float alpha, float scale) {
+    auto size = x.numel();
+    auto out = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    selu_kernel<<<num_blocks, block_size>>>(x.data_ptr<float>(), out.data_ptr<float>(), alpha, scale, size);
+    return out;
+}
+"""
+selu_cpp_source = "torch::Tensor selu_cuda(torch::Tensor x, float alpha, float scale);"
+selu = load_inline(name="selu", cpp_sources=selu_cpp_source, cuda_sources=selu_source, functions=["selu_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs a SELU activation using custom CUDA kernel.
+    """
+    def __init__(self):
+        super(ModelNew, self).__init__()
+        self.selu = selu
+        self.alpha = 1.0507f
+        self.scale = 1.0507f
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies SELU activation to the input tensor using custom CUDA kernel.
+
+        Args:
+            x (torch.Tensor): Input tensor of any shape.
+
+        Returns:
+            torch.Tensor: Output tensor with SELU applied, same shape as input.
+        """
+        return self.selu.selu_cuda(x, self.alpha, self.scale)

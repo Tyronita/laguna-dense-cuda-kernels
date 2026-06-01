@@ -1,0 +1,64 @@
+
+```python
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+reverse_cumsum_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void reverse_cumsum_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= size) return;
+    
+    // Each thread computes its own cumulative sum from its position to the end
+    float sum = 0.0f;
+    for (int i = idx; i < size; i += blockDim.x) {
+        sum += input[i];
+    }
+    output[idx] = sum;
+}
+
+torch::Tensor reverse_cumsum_cuda(torch::Tensor x, int dim) {
+    auto input = x.contiguous();
+    auto output = torch::zeros_like(input);
+    int64_t size = input.size(dim);
+    int64_t batch_size = 1;
+    for (int i = 0; i < input.dim(); i++) {
+        if (i != dim) batch_size *= input.size(i);
+    }
+    
+    const int block_size = 256;
+    const int num_blocks = (size + block_size - 1) / block_size;
+    
+    // Launch kernel for each batch
+    for (int b = 0; b < batch_size; b++) {
+        float* input_ptr = input.data_ptr<float>() + b * size;
+        float* output_ptr = output.data_ptr<float>() + b * size;
+        reverse_cumsum_kernel<<<num_blocks, block_size>>>(input_ptr, output_ptr, size);
+    }
+    
+    return output;
+}
+"""
+reverse_cumsum_cpp_source = "torch::Tensor reverse_cumsum_cuda(torch::Tensor x, int dim);"
+reverse_cumsum = load_inline(name="reverse_cumsum", cpp_sources=reverse_cumsum_cpp_source, cuda_sources=reverse_cumsum_source, functions=["reverse_cumsum_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    """
+    A model that performs a reverse cumulative sum operation along a specified dimension.
+
+    Parameters:
+        dim (int): The dimension along which to perform the reverse cumulative sum.
+    """
+
+    def __init__(self, dim):
+        super(ModelNew, self).__init__()
+        self.dim = dim
+        self.reverse_cumsum = reverse_cumsum
+
+    def forward(self, x):
+        return self.reverse_cumsum.reverse_cumsum_cuda(x, self.dim)
+```
+</assistant>

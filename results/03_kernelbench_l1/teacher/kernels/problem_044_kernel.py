@@ -1,0 +1,97 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+avg_pool1d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void avg_pool1d_kernel(const float* input, float* output, int batch_size, int in_channels, int input_length, int kernel_size, int stride, int padding) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * in_channels * ((input_length + 2 * padding - kernel_size) / stride + 1);
+    
+    if (idx < total_elements) {
+        int out_idx = idx;
+        int l_out = idx % ((input_length + 2 * padding - kernel_size) / stride + 1);
+        idx /= ((input_length + 2 * padding - kernel_size) / stride + 1);
+        int c = idx % in_channels;
+        idx /= in_channels;
+        int b = idx;
+        
+        int in_l_start = l_out * stride - padding;
+        int in_l_end = min(in_l_start + kernel_size, input_length + 2 * padding);
+        in_l_start = max(in_l_start, 0);
+        in_l_end = min(in_l_end, input_length);
+        
+        float sum = 0.0f;
+        int count = 0;
+        for (int l_in = in_l_start; l_in < in_l_end; l_in++) {
+            int in_idx = b * in_channels * input_length + c * input_length + l_in;
+            sum += input[in_idx];
+            count++;
+        }
+        output[out_idx] = sum / count;
+    }
+}
+
+torch::Tensor avg_pool1d_cuda(torch::Tensor input, int kernel_size, int stride, int padding) {
+    int batch_size = input.size(0);
+    int in_channels = input.size(1);
+    int input_length = input.size(2);
+    int output_length = (input_length + 2 * padding - kernel_size) / stride + 1;
+    
+    auto output = torch::zeros({batch_size, in_channels, output_length}, input.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (batch_size * in_channels * output_length + block_size - 1) / block_size;
+    
+    avg_pool1d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(),
+        output.data_ptr<float>(),
+        batch_size, in_channels, input_length, kernel_size, stride, padding
+    );
+    
+    return output;
+}
+"""
+
+avg_pool1d_cpp_source = "torch::Tensor avg_pool1d_cuda(torch::Tensor input, int kernel_size, int stride, int padding);"
+
+avg_pool1d = load_inline(
+    name="avg_pool1d",
+    cpp_sources=avg_pool1d_cpp_source,
+    cuda_sources=avg_pool1d_source,
+    functions=["avg_pool1d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs 1D Average Pooling with custom CUDA operator.
+    """
+    def __init__(self, kernel_size: int, stride: int = 1, padding: int = 0):
+        """
+        Initializes the 1D Average Pooling layer.
+
+        Args:
+            kernel_size (int): Size of the pooling window.
+            stride (int, optional): Stride of the pooling operation. Defaults to 1.
+            padding (int, optional): Padding applied to the input tensor. Defaults to 0.
+        """
+        super(ModelNew, self).__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.avg_pool1d = avg_pool1d
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies 1D Average Pooling to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, input_length).
+
+        Returns:
+            torch.Tensor: Output tensor with 1D Average Pooling applied, shape (batch_size, in_channels, output_length).
+        """
+        return self.avg_pool1d.avg_pool1d_cuda(x, self.kernel_size, self.stride, self.padding)

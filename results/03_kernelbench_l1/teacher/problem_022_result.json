@@ -1,0 +1,9 @@
+{
+  "compiled": true,
+  "correct": true,
+  "speedup": 0.618032786885246,
+  "kernel_ms": 12.2,
+  "ref_ms": 7.54,
+  "error": "",
+  "problem_id": 22
+}

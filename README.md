@@ -1,370 +1,567 @@
 # Laguna-Dense — CUDA Kernel Generation
 
-> **Group research — shared learnings.** This repo and its docs capture our group's
-> work densifying the Laguna-XS.2 MoE into a dense CUDA-kernel model. See
-> [`docs/TRAINING_PROVENANCE.md`](docs/TRAINING_PROVENANCE.md) and
-> [`docs/INVESTIGATION_GENERAL_METHOD.md`](docs/INVESTIGATION_GENERAL_METHOD.md).
-
-
 A **~3.0 B fully-dense** model that generates **CUDA / Triton GPU kernels** from PyTorch modules,
 **densified from the 33 B [poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) MoE**.
 
 > Part of the **[laguna-xs2-expert-coactivation-scheduling](https://github.com/cm2435/laguna-xs2-expert-coactivation-scheduling)**
 > project (MoE→dense densification). This repo collects **only the CUDA-kernel** work:
-> motivation → densification → kernel-mixture pretraining → CUDA SFT → eval harness → results.
+> motivation → densification → kernel-mixture pretraining → CUDA SFT → RL → eval harness → results.
+
+---
+
+## Model card — variants & download
+
+All on the Hub under **EvanOLeary** · load with `trust_remote_code=True`.
+
+| Variant | Stage | Size | Repo |
+|---|---|---|---|
+| **CUDA-SFT** (bf16) | SFT | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft) |
+| **CUDA-SFT** · int8 (torchao) | SFT · quant | 3.21 GB (−46%) | [`EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8) |
+| **CUDA-GRPO** (online) | Dr.GRPO + live compilation | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft) |
+| **CUDA-GRPO** (offline) | Dr.GRPO on Sakana rewards | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo) |
+| **CUDA-DPO** | DPO | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo) |
+
+**Sample output** (ReLU, greedy) — the GRPO-online model generates a correct CUDA kernel:
+```cuda
+__global__ void relu_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) output[idx] = input[idx] > 0.0f ? input[idx] : 0.0f;
+}
+```
+0.91× PyTorch eager on A100 (memory-bandwidth-bound — speedups need operator fusion).
 
 📊 Full graph index: **[docs/GRAPHS.md](docs/GRAPHS.md)** · 📓 Ablation log: **[docs/ABLATIONS.md](docs/ABLATIONS.md)**
 
 ---
 
-## TL;DR
-| | |
-|---|---|
-| **Teacher** | `poolside/Laguna-XS.2` — 33 B total / 3 B active MoE (256 experts top-8 + shared) |
-| **Student** | **~3.0 B dense** (1 SwiGLU FFN per layer, K=8 width) — 5.99 GB bf16 |
-| **Method** | DO-ACP warm-start → reconstruction (kernel mix) → CUDA SFT → GRPO/DPO |
-| **vs teacher** | **11× fewer params, 12× less VRAM, +26 % faster decode** (32.1 vs 25.4 tok/s) |
-| **Status** | SFT + GRPO + DPO done; **10% correct on KernelBench L1** (pass@1); 1% fast_1 |
-
-## Pipeline / lineage
-```
-poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
-   │ densify: routed experts → 1 dense SwiGLU (K=8) per layer
-   │ Stage 0  DO-ACP warm-start (Gram log-det select 8 experts → concat)
-   │ Stage 1  teacher-forced reconstruction on a KERNEL mixture  → "V2" checkpoint
-   │ Stage 2  SFT on SakanaAI CUDA                                → cuda-sft / cuda-sft-v2
-   │ Stage 3a GRPO-offline (Dr.GRPO on Sakana dataset rewards)    → cuda-grpo
-   │ Stage 3b GRPO-online  (Dr.GRPO with live compilation)       → cuda-rft   ← BEST
-   ▼ Stage 3c DPO (preference pairs from Sakana traces)           → cuda-dpo
-```
-
-## Model card — variants & download
-All on the Hub under **[`EvanOLeary`](https://huggingface.co/EvanOLeary)** · load with `trust_remote_code=True`.
-
-| Variant | Stage | Size | Repo |
-|---|---|---|---|
-| **CUDA-SFT** (bf16) | SFT | 5.99 GB | [`…-cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft) |
-| CUDA-SFT · **int8** (torchao) | SFT · quant | **3.21 GB (−46 %)** | [`…-cuda-sft-int8`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8) |
-| CUDA-SFT · **4-bit HQQ** | SFT · quant | **~1.7 GB (−72 %)** | [`…-cuda-sft-int4-hqq`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int4-hqq) |
-| CUDA-**GRPO** | online GRPO | 5.99 GB | [`…-cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo) |
-| CUDA-**DPO** | DPO | 5.99 GB | [`…-cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo) |
-| Recon · kernel-mix (V2) | pretrain | 5.99 GB | [`…-k8-kernelmix`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-kernelmix) |
-| Recon · Python (V1) | pretrain | 5.99 GB | [`…-k8-recon`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-recon) |
-
-### Quantization (verified — A100, torch 2.12 / transformers 5.9)
-| Recipe | Size | Quality | Speed | How |
-|---|---|---|---|---|
-| **torchao Int8 weight-only** *(recommended)* | 5.99 → **3.21 GB** | **byte-identical** on greedy | −34 % tok/s (`torch.compile` recovers most) | `quantize_(model, Int8WeightOnlyConfig())` (~0.4 s, save `.bin`) |
-| **HQQ 4-bit** (`nbits=4, group=64, axis=1`) | 5.99 → **~1.7 GB** | minor drift; valid CUDA | ~5.8 tok/s | `AutoHQQHFModel.quantize_model(...)` — no calibration |
-| ❌ bitsandbytes 0.49 · ❌ torchao Int4 (needs `mslk`) · ❌ NVFP4 (Blackwell) · ❌ FP8 (Hopper) | — | — | — | unsupported on Ampere/this stack |
-
-### Inference — measured (A100, dense model)
-| Backend | TTFT | single-seq | batched throughput | output |
-|---|---|---|---|---|
-| HF transformers, bf16 eager | 71 ms | 15.4 tok/s | — | ✅ valid CUDA |
-| HF + **`torch.compile`** (`mode="default"`) | **44 ms** | **32.9 tok/s (2.1×)** | — | ✅ |
-| **vLLM 0.22 (dense plugin)** | 51 ms | 21.6 tok/s | **see below** | ✅ valid CUDA |
-
-**vLLM batched throughput** (continuous batching — the win for GRPO rollouts/serving):
-
-| batch | 1 | 8 | 32 | 64 |
-|---|---|---|---|---|
-| aggregate tok/s | 21 | 161 | 621 | **1227** |
-
-→ **~80× HF-eager** at batch 64 (per-request steady ~19 tok/s). Real run: **64 kernels generated in 31 s**.
-
-### ✅ vLLM serving works (dense student)
-vLLM's native `laguna.py` is the **MoE teacher**; the dense student loads via a **~20-line,
-`model_type`-gated `LagunaDenseFFN`** that reuses native `LagunaMLP` (so **OG Laguna is untouched** —
-safe to upstream). Patch + run command + gotchas (`apply_chat_template`, `VLLM_USE_FLASHINFER_SAMPLER=0`):
-**[`docs/INFERENCE.md`](docs/INFERENCE.md)** · diff: [`docs/vllm_laguna_dense.patch`](docs/vllm_laguna_dense.patch) ·
-repro: `scripts/bench_vllm_dense.py`, `scripts/bench_vllm_batch.py`.
-
-- **One-off generation** → HF + `torch.compile` (fastest single-seq). **Rollouts / eval / serving** → vLLM (~1227 tok/s).
-- **Sampling:** `temperature 0.6 · top_k 20` → **pass@k**; `max_new_tokens ≥ 1024` (under-capping truncates kernels). **On-device:** ExecuTorch (fits mobile at 4-bit).
-- **Eval isolation:** always compile+run generated kernels in a **subprocess** (`scripts/eval_worker.py`) — a faulty kernel corrupts the CUDA context otherwise.
-
----
-
 ## 1 · Motivation — MoE expert activation (why densify)
+
 Before collapsing the MoE we measured how many of Laguna's **256 routed experts** actually fire on
 **C4** (161,932 tokens, all 39 sparse layers):
 
 | Metric | Value |
 |---|---|
-| Experts ever used | **256 / 256** (100 %) |
+| Experts ever used | **256 / 256** (100%) |
 | **Effective experts / layer** | **~158** of 256 |
-| Mean per-layer coverage | 99.7 % |
+| Mean per-layer coverage | 99.7% |
 | Load Gini (concentration) | **0.53** (peaks mid-stack) |
 
-The routed FFN behaves far **denser** than its 256-way capacity → a dense surrogate is viable, and
+The routed FFN behaves far **denser** than its 256-way capacity -> a dense surrogate is viable, and
 **K must exceed top-8**. This motivated **K=8 + DO-ACP warm-start**.
 
 ![expert activation](docs/figures/expert_activation.png)
 
-Full analysis: [gist](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · `docs/reports/expert-activation-c4.md`.
+### Per-dataset expert activation
+
+Different code domains activate very different expert pools. We profiled the frozen teacher on each
+dataset in our training mix:
+
+![expert pool by dataset](docs/figures/expert_activation_by_dataset_pool.png)
+
+| Dataset | Kind | Eff. experts/layer | Gini | Expert pool / batch |
+|---|---|---|---|---|
+| magicoder | NL instruction | 183 | 0.425 | 22.5B (72%) |
+| swebench_lite | NL problem | 163 | 0.494 | 20.0B (64%) |
+| *c4 (baseline)* | *web text* | *158* | *0.528* | *19.4B (62%)* |
+| codefeedback | NL query | 151 | 0.519 | 18.5B (59%) |
+| opencodeinstruct | NL to Python | 145 | 0.540 | 17.7B (56%) |
+| **kernelbook** | **Triton src** | **108** | **0.646** | **13.3B (42%)** |
+| **cuda_kernels** | **CUDA src** | **100** | **0.683** | **12.3B (39%)** |
+
+Kernel/CUDA code concentrates onto ~100-108 experts (39-42% of routed weights) vs ~158-183 for
+general text (62-72%). A kernel-focused batch touches **half the expert weights** of a general
+batch -- exactly the overhead that MoE->dense collapse removes.
+
+**Expert activation grids** (16x16, 256 experts -- brighter = more active):
+
+| C4 (web text, baseline) | KernelBook (Triton) | CUDA kernels |
+|---|---|---|
+| ![c4](docs/figures/expert_grid_c4.png) | ![kernelbook](docs/figures/expert_grid_kernelbook.png) | ![cuda](docs/figures/expert_grid_cuda_kernels.png) |
+
+| Magicoder (NL instruct) | SWE-bench (NL problem) | OpenCodeInstruct |
+|---|---|---|
+| ![magicoder](docs/figures/expert_grid_magicoder.png) | ![swebench](docs/figures/expert_grid_swebench.png) | ![opencodeinstruct](docs/figures/expert_grid_opencodeinstruct.png) |
+
+![summary](docs/figures/expert_activation_by_dataset_summary.png)
+
+Full analysis: [gist (C4)](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · [gist (per-dataset)](https://gist.github.com/Tyronita/d472e5664dc8291a1dab83f9f3d73fd5) · [gist (C4 detailed)](https://gist.github.com/Tyronita/cdcb80969d208b83e3f48cddfbbb1422) · `docs/reports/expert-activation-c4.md`.
 
 ---
 
-## 2 · Architecture (output model)
+## 2 · Architecture
+
 **2,996,678,656 params (~3.0 B), 5.99 GB bf16.** Each sparse layer's 256-expert MoE → **one dense
 SwiGLU FFN** (width K8×512 = 4096) + the kept shared expert. Attention/embeddings/norms copied from teacher.
 
 | Component | Params | Trained? |
 |---|---|---|
-| `routed_dense` × 39 | **0.98 B** | ✅ (reconstruction + SFT) |
+| `routed_dense` × 39 | **0.98 B** | ✅ reconstruction + SFT + RL |
 | attention × 40 (48/8 GQA, 30 SWA + 10 global) | 1.43 B | ❄️ frozen |
-| embed + lm_head | 0.41 B | ✅ SFT only (lm_head) |
+| embed + lm_head | 0.41 B | ✅ SFT + RL (lm_head) |
 | shared experts × 39 | 0.12 B | ❄️ frozen |
 | **Total** | **3.00 B** | |
-Hidden 2048 · 40 layers · 262 k ctx · 100 352 vocab · SiLU/SwiGLU.
+
+Hidden 2048 · 40 layers · 262k ctx · 100,352 vocab · SiLU/SwiGLU.
 
 ---
 
-## 3 · Training data
-### Reconstruction (kernel mixture, "V2")
-| Dataset | Weight | Language | Role |
-|---|---|---|---|
-| `GPUMODE/KernelBook` | 40 % | Python→Triton | kernel |
-| `nvidia/OpenCodeInstruct` | 30 % | Python | general code |
-| `SakanaAI/AI-CUDA-Engineer-Archive` | 20 % | PyTorch→CUDA-C++ | kernel |
-| Triton multiturn traces | 10 % | Triton reasoning | kernel |
+## 3 · Training pipeline
 
-≈ **50 % kernel / 30 % Python / 20 % CUDA-C++**.
+```
+poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
+   │
+   │ Stage 0  DO-ACP warm-start (Gram log-det select 8 experts → concat)
+   │ Stage 1  teacher-forced reconstruction on KERNEL mixture  → V2 checkpoint
+   │ Stage 2  SFT on SakanaAI CUDA (correct kernels only)     → cuda-sft
+   │ Stage 3a GRPO-online (Dr.GRPO + live compilation reward)  → cuda-rft
+   │ Stage 3a′ GRPO-offline (Dr.GRPO on Sakana dataset rewards) → cuda-grpo
+   ▼ Stage 3b DPO (preference pairs from Sakana traces)        → cuda-dpo
+```
 
-### SFT (CUDA)
-| | |
-|---|---|
-| Dataset | `SakanaAI/AI-CUDA-Engineer-Archive` (~30,615 rows, CC-BY-4.0) |
-| Fields | `PyTorch_Code_Module` (prompt) → `CUDA_Code` (target), filtered `Correct==True` |
-| Format | chat: `system + user(PyTorch ```python```) → assistant(```cpp CUDA```)`, prompt masked |
-| Not used | `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy` → reserved for the GRPO reward |
+### Stage 0 — DO-ACP warm-start ()
 
-### Datasets — links & contents
-| Dataset | Link | Contents |
-|---|---|---|
-| **GPUMODE/KernelBook** | [🤗](https://huggingface.co/datasets/GPUMODE/KernelBook) | PyTorch→**Triton** kernel pairs (`python_code` → `triton_code`) scraped + compiled; the kernel-generation backbone of the mix |
-| **nvidia/OpenCodeInstruct** | [🤗](https://huggingface.co/datasets/nvidia/OpenCodeInstruct) | ~5 M general **Python** instruction→code pairs; anti-monoculture / keeps general coding ability |
-| **SakanaAI/AI-CUDA-Engineer-Archive** | [🤗](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) | **PyTorch→CUDA-C++** kernels discovered by Sakana's agent; `level_1/2/3` splits, per-row `Correct`, `CUDA_Speedup_Native`, `NCU_Profile`, `Clang_Tidy`; ~30,615 `Correct==True` rows used for SFT/GRPO/DPO (CC-BY-4.0) |
-| **kernelbook-triton multiturn traces** | [🤗](https://huggingface.co/datasets/ppbhatt500/kernelbook-triton-multiturn-reasoning-traces) | multi-turn **Triton reasoning** traces (think→kernel); adds reasoning-shaped kernel data |
+**DO-ACP** (Data-Optimal Activation-Covariance Pruning) selects which experts to keep:
+1. Run a calibration set through the frozen MoE teacher
+2. For each layer, collect the **activation covariance matrix** of each expert's output
+3. Score subsets of K=8 experts by the **log-determinant of the Gram matrix** of their combined outputs — this measures how much of the output space the subset spans
+4. Select the 8 experts per layer that maximise this log-det (greedy search)
+5. **Concatenate** their SwiGLU weights into one dense FFN (width = K × 512 = 4096)
 
-**Eval substrate:** [KernelBench](https://github.com/ScalingIntelligence/KernelBench) (L1 single ops · L2 fusion · L3 nets · L4 HF-model) + the isolated `robust-kbench`-style reward.
+This gives the reconstruction a much better starting point than random init — the dense FFN
+starts as the optimal linear combination of the teacher’s most informative experts.
+Deep-layer MSE improves by ~26% vs random init.
 
----
-
-## 4 · Pretraining — reconstruction (kernel mixture, V2)
-Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output:
-`loss = mean_ℓ( MSE/mean(yℓ²) + 0.05·(1−cos) )`, Adafactor 2e-4, only `routed_dense` trained.
+### Stage 1 — Reconstruction (kernel mixture, V2) (`scripts/001_train_dense_reconstruction.py`)
+Teacher-forced, all-39-layer-parallel reconstruction of each MoE block's output.
 
 | | Value |
+| | Value |
 |---|---|
-| Steps / tokens | **2000 / ~8.2 M** |
-| Loss | 0.67 → **0.16** (normalized) |
-| Deep-layer MSE (L28-39) | 0.20 → **0.018** (tighter than the Python flavour's 0.022) |
-| Hardware | 1× H100, ~35 min, ~77 GB |
+| **Loss** | Normalized MSE + cosine alignment (see source below) |
+| **Trainable** | `routed_dense` only (0.98B) -- all other params frozen |
+| **Optimizer** | Adafactor, lr 2e-4 (zero extra state -- fits on 80GB) |
+| **Sequence length** | 2048 tokens |
+| **Batch size** | 1 (with grad accumulation as needed) |
+| **Precision** | bf16 mixed (teacher + student) |
+| **Input** | Tokenised text from kernel mixture, fed through both teacher and student |
+| **Mechanism** | Per layer: capture teacher MoE output via hook, run student dense FFN on same input, minimise difference |
+| Steps / tokens | 2000 / ~8.2 M |
+| Result | Loss 0.67 -> **0.16**, deep-layer MSE 0.20 -> **0.018** |
+| Hardware | 1x H100 80GB, ~35 min |
+
+**Loss function** (from [`src/densify/reconstruction.py`](src/densify/reconstruction.py)):
+```python
+for layer_id in layer_ids:               # all 39 sparse layers, in parallel
+    x      = teacher_inputs[layer_id]    # MoE block input (captured via hook)
+    target = teacher_outputs[layer_id]   # what the 256-expert MoE produces
+    pred   = student_mlp(x)              # what the single dense SwiGLU FFN produces
+
+    mse  = masked_mean((pred - target).pow(2).mean(dim=-1))
+    loss = mse / (target.pow(2).mean() + 1e-6)   # normalize by target energy
+    cos  = 1 - F.cosine_similarity(pred, target, dim=-1)
+    loss = loss + 0.05 * cos                       # + direction alignment
+
+total_loss = stack(layer_losses).mean()             # average across 39 layers
+```
+Each layer's `routed_dense` gets its own gradient. The 39 dense FFNs train independently.
+Teacher is frozen; only student dense FFNs update.
+
+**Training data (kernel mixture):**
+
+| Dataset | Weight | Language |
+|---|---|---|
+| `GPUMODE/KernelBook` | 40% | Python→Triton |
+| `nvidia/OpenCodeInstruct` | 30% | Python |
+| `SakanaAI/AI-CUDA-Engineer-Archive` | 20% | PyTorch→CUDA-C++ |
+| Triton multiturn traces | 10% | Triton reasoning |
 
 ![v2 reconstruction](docs/figures/v2_training.png)
 ![v2 per-layer heatmap](docs/figures/v2_layer_heatmap.png)
 
-(Smoke test — 8 layers: loss 0.049→0.033, cosine 0.95→0.58 — `docs/figures/kernelmix_smoke_curves.png`.)
+### Stage 2 — SFT (CUDA kernel generation) (`scripts/002_sft_cuda.py`)
 
----
-
-## 5 · SFT — CUDA kernel generation
 | | Value |
 |---|---|
-| Base | V2 kernel-mixture checkpoint |
-| Steps / tokens | **400 / ~3.5 M** |
-| Trainable | `routed_dense` + `lm_head` + norms (**1.19 B**) |
-| Optimizer | AdamW 1e-5, grad-clip 1.0, grad-accum 8, seq 2048 |
-| **Result** | **CE 0.675 → 0.21**; emits working CUDA + restores chat format |
+| **Data** | [`SakanaAI/AI-CUDA-Engineer-Archive`](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) (~30,615 rows) |
+| **Filter** | `Correct==True` only (verified kernels) |
+| **Splits** | `level_1` + `level_2` (v1); + `level_3` for v2 |
+| **Input columns** | `PyTorch_Code_Module` (prompt) -> `CUDA_Code` (target) |
+| **System prompt** | *"You are an expert GPU kernel engineer. Convert PyTorch modules into correct, optimized CUDA kernels."* |
+| **Chat format** | Laguna template: `<system>` + `<user>` (PyTorch in python block) -> `<assistant>` (CUDA in cpp block) |
+| **Loss** | Causal LM cross-entropy on assistant (CUDA) span only -- prompt is masked |
+| **Trainable** | `routed_dense` + `lm_head` + norms (1.19B) |
+| **Optimizer** | AdamW, lr=1e-5, grad-clip 1.0 |
+| **Batch** | grad-accum 8, seq len 2048 |
+| **Precision** | bf16, gradient checkpointing enabled |
+| Steps / tokens | 400 / ~3.5M (v1) -> +500 / ~4.4M (v2 continued from v1) |
+| Result | **CE 0.675 -> 0.21**; emits working CUDA + restores chat format |
 
 ![sft curve](docs/figures/sft_curve.png)
 
-**Sample (ReLU, chat prompt):** the model returns a correct CUDA kernel —
-```cpp
-__global__ void relu_kernel(const float* __restrict__ in, float* __restrict__ out, int64_t n){
-  int i = blockIdx.x*blockDim.x + threadIdx.x; if (i<n) out[i] = in[i]>0 ? in[i] : 0; }
-torch::Tensor forward(torch::Tensor x){ auto o=torch::empty_like(x); int t=256,b=(x.numel()+t-1)/t;
-  relu_kernel<<<b,t>>>(x.data_ptr<float>(), o.data_ptr<float>(), x.numel()); return o; }
-```
+### Stage 3a — GRPO-online (`scripts/003_grpo.py`) → [`cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft)
 
-### Training overview (data + steps)
+Per prompt, sample 6 kernels → **actually compile + run** each in a subprocess → reward from verification.
+
+| | Value |
+|---|---|
+| **Algorithm** | Dr.GRPO (unbiased advantage: `r − mean`, no std/length normalization) |
+| **Reward** | `+0.1` parse · `+0.2` compile · `+0.4` correct · `+0.3·clip(speedup,0,3)/3` |
+| **Sampling** | DAPO dynamic (skip zero-variance groups) |
+| **KL anchor** | β=0.02 to SFT reference |
+| **Trainable** | `routed_dense` + `lm_head` |
+| Steps / group size | 24 / 6 |
+| LR / temperature | 1e-6 / 0.9 |
+| Tasks | elementwise ops (relu, sigmoid, tanh, gelu, silu, softplus) |
+
+### Stage 3a′ — GRPO-offline (`scripts/003_grpo_offline.py`) → [`cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo)
+
+**No live compilation** — reward read directly from [`SakanaAI/AI-CUDA-Engineer-Archive`](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) columns:
+- `Correct` (bool) — gates the reward
+- `CUDA_Speedup_Native` (float) — speedup vs PyTorch eager
+
+`reward = CUDA_Speedup_Native if Correct else 0.0`
+
+Groups ~6 candidate kernels per `Task_ID` from levels 1+2, picks 2 best + 2 worst + random middle
+for high-variance groups (better learning signal).
+
+| | Value |
+|---|---|
+| **Algorithm** | Dr.GRPO (same as online) |
+| **Reward source** | Pre-recorded `Correct` + `CUDA_Speedup_Native` columns |
+| **Sampling** | DAPO dynamic (skip zero-variance groups) |
+| **KL anchor** | β=0.02 to SFT reference |
+| **Trainable** | `routed_dense` + `lm_head` |
+| Steps / group size | 120 / 6 |
+| Max tasks / splits | 120 tasks from `level_1,level_2` |
+| LR | 1e-6 |
+| **Limitation** | Off-policy — sharpens toward Sakana's best traces but cannot exceed the dataset |
+
+### Stage 3b — DPO (preference pairs) (`scripts/004_dpo.py`)
+
+| | Value |
+|---|---|
+| **Data** | SakanaAI traces: prefer correct+fastest kernel over incorrect/slow per task |
+| **Loss** | DPO (Rafailov et al.): `−log σ(β·Δlogp)` |
+| **Reference** | frozen SFT model |
+| β / LR | 0.1 / 5e-7 |
+| Steps | 300, up to 8 pairs per task, ~200 tasks |
+
+### Training overview
 ![overview](docs/figures/training_overview.png)
 
-| Stage | Steps | Tokens | Data | Trainable |
-|---|---|---|---|---|
-| Warm-start (DO-ACP) | — | — | calibration | — |
-| Reconstruction (V2) | 2000 | ~8.2 M | kernel mixture | routed_dense |
-| SFT (CUDA) | 400 | ~3.5 M | SakanaAI CUDA | routed_dense + lm_head + norms |
+| Stage | Steps | Tokens | Data | Trainable | Loss |
+|---|---|---|---|---|---|
+| Warm-start (DO-ACP) | — | — | calibration | — | — |
+| Reconstruction (V2) | 2000 | ~8.2 M | kernel mixture | routed_dense | MSE+cos |
+| SFT (CUDA) | 400 | ~3.5 M | SakanaAI CUDA | +lm_head +norms | CE |
+| GRPO-online | 24 | ~144 rollouts | live compilation | routed_dense +lm_head | Dr.GRPO |
+| DPO | 300 | ~1600 pairs | Sakana preferences | routed_dense +lm_head | DPO |
 
 ---
 
-## 6 · Inference settings (reproducible)
-| Knob | Value |
-|---|---|
-| temperature / top_k | 0.6 / 20 |
-| max_new_tokens | 1024 (don't under-cap — truncates complex kernels) |
-| do_sample | True (→ use **pass@k**; same prompt gives a different kernel each sample) |
-| enable_thinking | False |
-| system prompt | must match target DSL (CUDA-only for CUDA, Triton-only for Triton) |
-
----
-
-## 7 · Results
-
-### 7a · KernelBench Level 1 — all model variants (pass@1, greedy, A100 80GB)
+## 4 · Results — KernelBench Level 1
 
 Full evaluation on [KernelBench](https://github.com/ScalingIntelligence/KernelBench) Level 1
 (100 single-operator problems: matmul, conv, activations, norms, pooling, reductions, losses).
-Greedy decoding (temperature=0), single attempt per problem, subprocess-isolated evaluation.
+Greedy decoding (temperature=0), pass@1, subprocess-isolated evaluation on A100 80GB.
 
-| Model | Method | Compile | Correct (fast_0) | Faster (fast_1) | Avg Speedup |
+### All variants
+
+| Model | Params | Compile | Correct (fast_0) | Faster (fast_1) | Avg Speedup |
 |---|---|---|---|---|---|
-| **GRPO-online** | Dr.GRPO + live compilation | 23% | **10%** | **1%** | 14.6x* |
-| **GRPO-offline** | Dr.GRPO on Sakana rewards | 19% | **9%** | **1%** | 8.5x* |
-| **DPO** | DPO on Sakana preferences | 27% | 2% | 0% | 0.55x |
-| **SFT-v2** | SFT (level 1+2+3, +500 steps) | 21% | 0% | 0% | — |
-| **SFT-v1** | SFT (level 1+2, 400 steps) | 27% | 0% | 0% | — |
+| **Teacher** ([Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2)) | **33B MoE** | 57% | **24%** | **4%** | 3.1x |
+| **GRPO-online** ([`cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft)) | 3B dense | 23% | 10% | 1% | 14.6x* |
+| **GRPO-offline** ([`cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo)) | 3B dense | 19% | 9% | 1% | 8.5x* |
+| **DPO** ([`cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo)) | 3B dense | 27% | 2% | 0% | 0.6x |
+| **SFT** ([`cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft)) | 3B dense | 27% | 0% | 0% | — |
 
-*Avg speedup inflated by P12 (diagonal matmul, 72-143x algorithmic optimization — legitimate).
+*Avg speedup inflated by P12 (diagonal matmul, 72–143x algorithmic optimization — legitimate).
 
-**Key finding: RL is essential for correctness.** SFT models compile (21-27%) but achieve 0%
-correctness. GRPO reward (compile + correct + speedup) teaches the model to produce numerically
-correct kernels. Online GRPO (live compilation, 24 steps) slightly outperforms offline
-(dataset rewards, 120 steps).
+### vs frontier models ([KernelBench paper](https://arxiv.org/abs/2502.10517))
 
-### 7b · Comparison to frontier models (from [KernelBench paper](https://arxiv.org/abs/2502.10517))
+| Model | Size | fast_1 (L1) |
+|---|---|---|
+| DeepSeek R1 | 671B | 12% |
+| OpenAI o1 | ~200B | 10% |
+| Claude 3.5 Sonnet | ~175B | 10% |
+| GPT-4o | ~200B | 4% |
+| Llama 3.1-405B | 405B | 3% |
+| **Ours (GRPO-online, 3B)** | **3B** | **1%** |
 
-| Model | Size | fast_1 (L1) | fast_1 (L2) | fast_1 (L3) |
-|---|---|---|---|---|
-| DeepSeek R1 | 671B | 12% | 36% | 2% |
-| OpenAI o1 | ~200B | 10% | 24% | 12% |
-| Claude 3.5 Sonnet | ~175B | 10% | 7% | 8% |
-| DeepSeek V3 | 671B | 6% | 4% | 0% |
-| GPT-4o | ~200B | 4% | 5% | 0% |
-| Llama 3.1-405B | 405B | 3% | 0% | 0% |
-| Llama 3.1-70B | 70B | 3% | 0% | 0% |
-| **Ours (GRPO-online, 3B)** | **3B** | **1%** | — | — |
+### Key findings
 
-Our 3B model achieves 1% fast_1, comparable to Llama-3.1-405B (3%) despite being **135x smaller**.
-The KernelBench L1 ceiling scales weakly with model size — the bottleneck is training data coverage
-(which ops the model has seen CUDA for), not raw model capacity.
+1. **The 33B MoE teacher scores 24% correct** — significantly better than all 3B dense students.
+   Densification lost kernel-writing capability that GRPO only partially recovered on the narrow
+   set of ops it was trained on. The teacher uniquely solves 17 ops the best student cannot
+   (Sigmoid, Softmax, Swish 1.58x, Softsign 2.24x, ELU, HardSigmoid, L1Norm, etc).
+2. **RL is essential for the dense student.** SFT compiles (27%) but achieves 0% correctness.
+   GRPO reward (compile + correct + speedup) is what teaches the 3B model to produce correct kernels.
+3. **The student wins on matmul variants** it was GRPO-trained on, but fails on everything else.
+   More diverse SFT/GRPO data is the clear next step.
 
-### 7c · Correct kernels (detail)
+### Error analysis (GRPO-online vs teacher)
 
-| Problem | Op | Speedup | Notes |
+| Error | Teacher (33B) | Student (3B) |
+|---|---|---|
+| **Correct** | **24** | 10 |
+| Compiled but incorrect | 33 | 13 |
+| `__init__` missing args | 0 | 43 |
+| CUDA build error | 21 | 15 |
+| Illegal memory access | 7 | 5 |
+| Other | 15 | 14 |
+
+### Eval methodology
+
+**Prompt template** (one-shot, same for all models):
+```
+You write custom CUDA operators to replace the pytorch operators in the
+given architecture to get speedups.
+
+Here's an example to show you the syntax of inline embedding custom CUDA
+operators in PyTorch:
+
+Input architecture:
+  [elementwise add Model class]
+
+Optimized with CUDA operators:
+  [load_inline example with CUDA kernel + ModelNew class]
+
+You are given the following architecture:
+  [KernelBench reference code]
+
+Optimize the architecture named Model with custom CUDA operators!
+Name your optimized output architecture ModelNew.
+```
+
+**Settings**: greedy (temperature=0), max_new_tokens=2048, chat template with `<user>/<assistant>` tags, `</assistant>` as stop token.
+
+**Eval**: KernelBench `eval_kernel_against_ref` -- 5 correctness trials (random inputs, `atol=rtol=1e-4`), 100 timing trials (CUDA events), subprocess-isolated.
+
+### Per-problem results (teacher vs best student)
+
+| PID | Problem | Teacher (33B) | GRPO-online (3B) |
 |---|---|---|---|
-| P1 | Square matmul | 0.26x | Shared-memory tiling, correct but slower than cuBLAS |
-| P6 | Large-K matmul | 0.12x | Same tiling, slower on large K dimension |
-| P8 | Irregular matmul | 0.24x | Handles M/K/N properly |
-| **P12** | **Diagonal matmul** | **72-143x** | **Algorithmic win: exploits diag structure** |
-| P13 | Symmetric matmul | 0.26x | Standard tiling (doesn't exploit symmetry) |
-| P15 | Lower-triangular matmul | 0.27x | Standard tiling |
-| P19 | ReLU | 0.92x | Near PyTorch parity (memory-bound) |
-| P22 | Tanh | 0.88x | Uses tanhf(), correct |
-| P26 | GELU | 0.85x | Approximation formula, correct |
+| 1 | Square matmul | COMPILED | **OK 0.03x** |
+| 5 | Matrix scalar mul | **OK 0.65x** | FAIL |
+| 7 | Small-K matmul | **OK 0.17x** | COMPILED |
+| 8 | Irregular matmul | **OK 0.13x** | **OK 0.13x** |
+| 9 | Tall-skinny matmul | **OK 0.18x** | **OK 0.24x** |
+| 10 | 3D tensor matmul | COMPILED | **OK 0.12x** |
+| 11 | 4D tensor matmul | COMPILED | **OK 0.21x** |
+| 12 | Diagonal matmul | **OK 61.2x** | **OK 143.0x** |
+| 13 | Symmetric matmul | **OK 0.12x** | COMPILED |
+| 14 | Upper-triangular | **OK 1.06x** | COMPILED |
+| 15 | Lower-triangular | **OK 0.29x** | COMPILED |
+| 17 | Transposed-B matmul | **OK 0.03x** | **OK 0.17x** |
+| 19 | ReLU | **OK 0.65x** | **OK 0.91x** |
+| 20 | LeakyReLU | **OK 0.65x** | COMPILED |
+| 21 | Sigmoid | **OK 0.63x** | FAIL |
+| 22 | Tanh | **OK 0.62x** | **OK 0.83x** |
+| 23 | Softmax | **OK 0.53x** | FAIL |
+| 24 | LogSoftmax | **OK 0.62x** | COMPILED |
+| 25 | Swish | **OK 1.58x** | FAIL |
+| 26 | GELU | **OK 0.58x** | FAIL |
+| 28 | HardSigmoid | **OK 0.64x** | FAIL |
+| 29 | Softplus | **OK 0.58x** | FAIL |
+| 30 | Softsign | **OK 2.24x** | FAIL |
+| 31 | ELU | **OK 0.65x** | FAIL |
+| 32 | HardTanh | **OK 0.65x** | COMPILED |
+| 38 | L1Norm | **OK** | FAIL |
+| 99 | TripletMarginLoss | **OK 0.83x** | FAIL |
 
-**P12 is the standout** — the model recognized `diag(A) * B` is elementwise row-scaling, not full
-matmul. 72-143x speedup vs PyTorch's broadcast multiply. Passes all 5 correctness trials.
+**Teacher uniquely correct (17)**: P5, P7, P13-15, P20-21, P23-26, P28-32, P38, P99
+**Student uniquely correct (3)**: P1, P10, P11
+**Both correct (7)**: P8, P9, P12, P17, P19, P22
 
-### 7d · Error analysis (GRPO-online, best model)
+### Teacher inference speed
 
-| Error | Count | Root cause |
-|---|---|---|
-| Correct | 10 | Working CUDA kernel |
-| Compiled but incorrect | 13 | Wrong math (index bugs, wrong formula) |
-| `__init__` missing args | 43 | Conv/norm/pool need constructor weights — model only knows elementwise |
-| CUDA build error | 15 | Invalid C++ (but compiles simpler float* code) |
-| CUDA illegal memory | 5 | Out-of-bounds (flat 1D index into multi-dim tensor) |
-| No code extracted | 4 | Model output think-loop or truncated |
-| Other | 10 | Eval crash, syntax error |
+| Model | Params | VRAM | tok/s (A100) |
+|---|---|---|---|
+| Teacher (Laguna-XS.2 MoE) | 33B total / 3B active | 67 GB | 12.5 |
+| Student (dense bf16) | 3B | 6 GB | 15.4 (eager) / 32.9 (compiled) |
+| Student (int8 torchao) | 3B | 3.2 GB | ~10 (eager) / ~22 (compiled) |
+| Student (vLLM batched x64) | 3B | 6 GB | 1,227 aggregate |
 
-**The #1 blocker is coverage** (43/100): the model was trained on elementwise ops only (SakanaAI data)
-and has no knowledge of conv/pooling/norm CUDA kernels. More diverse training data would directly
-address this gap.
+The student is **2.6x faster** single-seq (compiled) and **98x faster** batched vs the teacher -- while fitting in 10x less VRAM.
 
-### 7e · Speed & size vs teacher (head-to-head, same 6 CUDA questions)
-| | OURS (3.0 B dense) | TEACHER Laguna-XS.2 |
-|---|---|---|
-| Params | **3.0 B** | 33.4 B |
-| VRAM / load | **6 GB / 3 s** | 67 GB / 35 s |
-| **Decode speed** | **32.1 tok/s** | 25.4 tok/s |
-→ **11x smaller, 12x less VRAM, +26% faster.** Neither model beats PyTorch eager on single
-elementwise ops (memory-bandwidth-bound — speedups need fusion / KernelBench L2).
+### About the teacher -- Laguna-XS.2
 
-### What's in KernelBench (the benchmark)
-| Level | # | Contents |
-|---|---|---|
-| L1 | 100 | single ops — mostly **matmul/conv** + activations/norms/reductions/losses |
-| L2 | 100 | **fusion** chains (where >1x speedup is winnable) |
-| L3 | 50 | full nets (ResNet/VGG/DenseNet) |
-| L4 | 20 | HF-model-level |
+[poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) is a **33.4B parameter MoE** code model by [Poolside AI](https://poolside.ai):
+- **256 routed experts**, top-8 routing + 1 shared expert per layer -> **3B active** per token
+- 40 layers, 2048 hidden, 48/8 GQA heads, 262k context
+- Sigmoid routing activation (not softmax), SwiGLU FFN
+- 30 sliding-window attention layers + 10 full-attention layers
+- Trained on code (details not public), 100,352 vocab with chat template
+- The model that our dense student is distilled from
+
+### Sample generated kernels — teacher vs student
+
+**P12 — Diagonal matmul (both correct, student 143x / teacher 61x):**
+
+Both models recognise that  is elementwise row-scaling. The teacher outputs clean
+Python with ; the student outputs raw C++ (wrapped by our eval harness).
+
+<details><summary>Teacher (61.2x speedup) — Python + load_inline, 2D grid</summary>
+
+
+</details>
+
+<details><summary>Student GRPO-online (143x speedup) — flat 1D index, slightly faster</summary>
+
+
+</details>
+
+The student's flat 1D indexing avoids the 2D grid overhead and is ~2.3x faster. Both are correct.
+
+**P30 — Softsign (teacher only, 2.24x speedup):**
+
+The teacher beats PyTorch eager because  goes through Python dispatch overhead;
+the CUDA kernel is a single fused :
+
+
+
+The student cannot generate this — it was never trained on Softsign CUDA.
+
+**P19 — ReLU (student 0.91x, teacher 0.65x):**
+
+Both write correct ReLU kernels but neither beats PyTorch eager (memory-bandwidth-bound).
+The student's version is closer to parity (0.91x vs 0.65x) — likely because GRPO optimised
+specifically for ReLU during training.
+
+Full per-problem results: [`results/03_kernelbench_l1/`](results/03_kernelbench_l1/)
 
 ---
 
-## 8 · ⚠️ Reproducibility finding — isolate kernel evaluation
-Running generated CUDA **in the model's process is INVALID**: a buggy kernel (out-of-bounds write)
-corrupts the CUDA context and makes **every later eval fail**, regardless of the model →
-order-dependent, contaminated results. **Compile + run each kernel in its own subprocess**
-(`scripts/eval_worker.py`). Verified: a crashing kernel segfaults only the worker; the driver survives.
-(KernelBench / robust-kbench do the same.)
+## 5 · Failure taxonomy (from generated CUDA)
 
-## 9 · Failure taxonomy (from generated CUDA)
 | Category | Example | Fix |
 |---|---|---|
 | Wrong math/formula | GeLU / Sigmoid / Softmax | GRPO correctness reward |
 | Deprecated API | `input.type()` vs `.scalar_type()` | prompt hint / GRPO |
 | Inverted bounds/mask | `if (idx<size) return;` | GRPO |
-| Truncation | Softmax cut off | raise `max_new_tokens` |
-| Const-reassign / syntax | grid-stride `const int idx` | GRPO compile reward |
+| Truncation (hit token limit) | Softmax cut off mid-kernel | raise `max_new_tokens` |
+| `__init__` missing args | conv/norm/pool need weights | broader SFT data |
 
 ---
 
-## 10 · Repo layout — the `000–004` pipeline (CUDA post-training separated)
+## 6 · Reproducibility — isolate kernel evaluation
 
-The numbered pipeline reads top-to-bottom. **Stages 0–1 are the densification core** (shared with
-the [cm2435 research repo](https://github.com/cm2435/laguna-xs2-expert-coactivation-scheduling));
-**stages 2–4 + reward + eval are the CUDA-focused post-training** that is the point of *this* repo.
+Running generated CUDA **in the model's process is INVALID**: a buggy kernel (out-of-bounds write)
+corrupts the CUDA context and makes **every later eval fail**, regardless of the model →
+order-dependent, contaminated results. **Compile + run each kernel in its own subprocess**
+(`scripts/eval_worker.py`). Verified: a crashing kernel segfaults only the worker; the driver survives.
 
-**① Densification core** (MoE → dense)
-| Script | Stage | Trains |
-|---|---|---|
-| `scripts/000_build_dense_placeholder.py` | build + DO-ACP warm-start (`--init {random,selected-concat}`) | — |
-| `scripts/001_train_dense_reconstruction.py` | teacher-forced reconstruction | `routed_dense` |
-| `src/densify/{densify_layer,reconstruction,dense_checkpoint/*}.py` | DO-ACP + reconstruction + dense-model defn | — |
+---
 
-**② CUDA post-training** ⭐ *(the CUDA-focused work)*
-| Script | Stage | Trains |
-|---|---|---|
-| `scripts/002_sft_general.py` · `scripts/002_sft_cuda.py` | SFT (general / Sakana CUDA) | `routed_dense + lm_head + norms` |
-| `scripts/003_grpo.py` | GRPO/RLVR (Dr.GRPO + DAPO; **isolated-parallel reward**) | `routed_dense + lm_head` |
-| `scripts/003_grpo_offline.py` | offline GRPO on Sakana traces | `routed_dense + lm_head` |
-| `scripts/004_dpo.py` | DPO (correct+fast ≻ incorrect/slow) | `routed_dense + lm_head` |
-| `src/densify/kernel_reward.py` | verifiable reward (parse→compile→correct→speedup) + **`reward_for_text_isolated`** (subprocess) | — |
+## 7 · Inference optimisation
 
-**③ CUDA eval & ablations**
-| Script | What |
+### Quantization (verified — A100, torch 2.12 / transformers 5.9)
+
+| Recipe | Size | Quality | Speed |
+|---|---|---|---|
+| **torchao Int8 weight-only** (recommended) | 5.99 → 3.21 GB | byte-identical on greedy | −34% tok/s (torch.compile recovers most) |
+| HQQ 4-bit (nbits=4, group=64, axis=1) | 5.99 → ~1.7 GB | minor drift; valid CUDA | ~5.8 tok/s |
+
+### Inference backends (A100, dense model)
+
+| Backend | TTFT | Single-seq tok/s | Notes |
+|---|---|---|---|
+| HF transformers, bf16 eager | 71 ms | 15.4 | Baseline |
+| HF + `torch.compile` (mode="default") | 44 ms | **32.9** (2.1×) | Best single-seq |
+| vLLM 0.22 (dense plugin) | 51 ms | 21.6 | Best for batched/serving |
+
+### vLLM batched throughput (continuous batching)
+
+| Batch | 1 | 8 | 32 | 64 |
+|---|---|---|---|---|
+| Aggregate tok/s | 21 | 161 | 621 | **1227** |
+
+→ **~80× HF-eager at batch 64**. Real run: 64 kernels generated in 31s.
+
+vLLM's native `laguna.py` is the MoE teacher; the dense student loads via a ~20-line `LagunaDenseFFN`
+plugin that reuses `LagunaMLP`. Patch + run command: [`docs/INFERENCE.md`](docs/INFERENCE.md).
+
+**Recommendation:** one-off generation → HF + `torch.compile`. Rollouts / eval / serving → vLLM.
+
+### Sampling settings
+
+| Knob | Value |
 |---|---|
-| `scripts/eval_worker.py` · `scripts/kernelbench_lite_eval.py` · `eval_10ops_isolated.py` | **isolated** KernelBench-Lite eval (subprocess per kernel) |
-| `scripts/head_to_head.py` | ours vs teacher (tok/s + correctness) |
-| `scripts/ablate_api_hint.py` · `ablate_triton.py` | prompt ablations (CUDA / Triton) |
+| temperature / top_k | 0.6 / 20 |
+| max_new_tokens | ≥ 1024 (under-capping truncates kernels) |
+| do_sample | True (→ pass@k; same prompt gives different kernels each sample) |
+| enable_thinking | False |
 
-**Docs** · [`TRAINING_PROVENANCE`](docs/TRAINING_PROVENANCE.md) (per-stage trainable params) · [`INVESTIGATION_GENERAL_METHOD`](docs/INVESTIGATION_GENERAL_METHOD.md) (random vs lift-and-shift, confirmed) · [`REPRODUCE`](docs/REPRODUCE.md) (GRPO/DPO deep guides) · [`PROVENANCE`](docs/PROVENANCE.md) · [`GRAPHS`](docs/GRAPHS.md) · [`ABLATIONS`](docs/ABLATIONS.md) · **[consolidation/PR plan →](docs/PR_PLAN.md)**
+---
 
-## 11 · Next steps
-- [ ] **More diverse SFT data** — conv/norm/pooling CUDA examples (addresses 43% of failures)
-- [ ] **KernelBench L2** (fusion chains) — where >1x speedups are actually achievable
-- [ ] **Teacher model baseline** on KernelBench L1 — in progress
-- [ ] NVFP4 quantization + vLLM serve as a `generate_kernel` tool
+## 8 · Repo contents
 
-## References
-RADLADS (arXiv:2505.03005) · Pruning & Distilling MoE into Dense (arXiv:2605.28207) ·
-Sakana AI CUDA Engineer / robust-kbench (arXiv:2509.14279) · KernelBench · DeepSeek-R1 GRPO (arXiv:2501.12948) · Dr.GRPO · DAPO.
+| Path | What |
+|---|---|
+| `scripts/000_build_dense_placeholder.py` | DO-ACP warm-start (expert selection + dense FFN init) |
+| `scripts/001_train_dense_reconstruction.py` | Teacher-forced reconstruction (MSE+cos loss) |
+| `scripts/002_sft_cuda.py` | CUDA SFT (PyTorch->CUDA, correct kernels, chat-formatted) |
+| `scripts/003_grpo.py` | GRPO-online (Dr.GRPO + DAPO + live compilation) |
+| `scripts/003_grpo_offline.py` | GRPO-offline (Dr.GRPO on Sakana dataset rewards) |
+| `scripts/004_dpo.py` | DPO on Sakana preference pairs |
+| `src/densify/kernel_reward.py` | Verifiable reward (parse→compile→correct→speedup) |
+| `scripts/eval_worker.py` | Subprocess-isolated kernel evaluator |
+| `scripts/kernelbench_l1_eval.py` | Full KernelBench L1 evaluation pipeline |
+| `scripts/kb_pipeline.py` | Fast pipeline (batch gen + parallel eval) |
+| `results/` | All evaluation results + analysis |
+| `docs/` | Graphs, ablations, inference guide |
+
+## 9 · Next steps
+
+- [ ] **More diverse SFT data** — conv/norm/pooling CUDA examples (addresses 43% of student failures)
+- [ ] **More GRPO steps** on broader ops — current GRPO only trains on 3–6 elementwise ops
+- [ ] **KernelBench L2** (fusion chains) — where >1x speedups are achievable
+- [ ] **pass@k evaluation** — temperature sampling with k=4 may recover more correct kernels
+
+## References & attribution
+
+### Base model
+- **Laguna-XS.2** — [poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) · [Poolside AI](https://poolside.ai). The 33B/3B-active MoE teacher model this work densifies. 256 routed experts, top-8 + shared, SwiGLU, 262k context.
+
+### Densification method
+- **RADLADS** — *Routing-Aware Dense Layerwise Approximation for Dense Surrogates* · KRAFTON AI · [arXiv:2505.03005](https://arxiv.org/abs/2505.03005). The DO-ACP warm-start (Gram log-det expert selection) and teacher-forced reconstruction recipe used in Stage 0–1.
+- **Pruning & Distilling MoE into Dense** — [arXiv:2605.28207](https://arxiv.org/abs/2605.28207). Motivation and framing for MoE→dense compression via width-scaled FFN replacement.
+
+### Training data
+- **SakanaAI AI-CUDA-Engineer-Archive** — [SakanaAI/AI-CUDA-Engineer-Archive](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) · [Sakana AI](https://sakana.ai) · [arXiv:2509.14279](https://arxiv.org/abs/2509.14279). The ~30k verified PyTorch→CUDA pairs used for SFT (Stage 2), offline GRPO rewards, and DPO preference pairs (Stage 3). Also the source of the `robust-kbench` anti-reward-hacking methodology.
+- **KernelBook** — [GPUMODE/KernelBook](https://huggingface.co/datasets/GPUMODE/KernelBook) · [GPU MODE](https://gpumode.com). Python→Triton kernel examples (40% of reconstruction mixture).
+- **OpenCodeInstruct** — [nvidia/OpenCodeInstruct](https://huggingface.co/datasets/nvidia/OpenCodeInstruct) · NVIDIA. General Python code-instruct data (30% of reconstruction mixture).
+
+### RL algorithms
+- **GRPO** — *Group Relative Policy Optimization* · DeepSeek · [arXiv:2501.12948](https://arxiv.org/abs/2501.12948). The base RL algorithm: sample G completions per prompt, compute group-relative advantages, policy-gradient update with KL anchor. Used in Stage 3a.
+- **Dr.GRPO** — *Don't Repeat GRPO* · [arXiv:2503.20783](https://arxiv.org/abs/2503.20783). Fix to GRPO's advantage normalization: drops std/length division → unbiased advantage `r − mean(r)`. Prevents length-gaming. Used in both our GRPO and DPO arms.
+- **DAPO** — *Dynamic Sampling Policy Optimization* · [arXiv:2503.14476](https://arxiv.org/abs/2503.14476). Skip zero-variance groups (no learning signal) → saves expensive nvcc compiles. Used in Stage 3a.
+- **RLVR** — *RL with Verifiable Rewards* (Tülu3 / Kimi-k1.5). The principle of using a verifiable function (compile→correct→speedup) rather than a learned reward model. Our Stage 3a reward is fully verifiable.
+- **DPO** — *Direct Preference Optimization* · Rafailov et al. · [arXiv:2305.18290](https://arxiv.org/abs/2305.18290). Loss `−log σ(β·Δlogp)` on preference pairs. Used in Stage 3b.
+
+### Evaluation
+- **KernelBench** — *Can LLMs Write Efficient GPU Kernels?* · Stanford Scaling Intelligence Lab · [arXiv:2502.10517](https://arxiv.org/abs/2502.10517) · [github](https://github.com/ScalingIntelligence/KernelBench) · [kernelbench.com](https://kernelbench.com). The benchmark framework (L1–L4) and eval methodology (subprocess-isolated, `eval_kernel_against_ref`, CUDA event timing) used throughout.
+- **Kevin** — *Cognition + Stanford agentic kernel generation* · [arXiv:2507.11948](https://arxiv.org/abs/2507.11948). Reward hacking taxonomy referenced in our failure analysis.
+
+### Inference
+- **vLLM** — [vllm-project/vllm](https://github.com/vllm-project/vllm). Serving engine with native `laguna.py` for the MoE teacher; dense student via `LagunaDenseFFN` plugin.
+- **torchao** — [pytorch/ao](https://github.com/pytorch/ao). Int8 weight-only quantization (3.21 GB, byte-identical greedy).
+- **HQQ** — *Half-Quadratic Quantization* · [mobiusml/hqq](https://github.com/mobiusml/hqq). 4-bit quantization (~1.7 GB).
+
+### Inline attributions in the training pipeline
+
+| Stage | What we used | From |
+|---|---|---|
+| DO-ACP warm-start | Gram log-det expert selection | RADLADS (KRAFTON) |
+| Reconstruction loss | Normalized MSE + cosine | RADLADS (KRAFTON) |
+| SFT data | Verified PyTorch→CUDA pairs | SakanaAI |
+| GRPO algorithm | Group-relative policy optimization | DeepSeek R1 |
+| Dr.GRPO fix | Unbiased advantage (no std normalization) | Dr.GRPO |
+| DAPO sampling | Skip zero-variance groups | DAPO |
+| Live compilation reward | Subprocess-isolated compile→correct→speedup | SakanaAI robust-kbench |
+| DPO loss | `−log σ(β·Δlogp)` on preference pairs | Rafailov et al. |
+| Eval framework | KernelBench L1 (100 problems, fp32, A100) | Stanford Scaling Intelligence |
+
+---
 
 *Built at the Poolside Laguna XS.2 research hackathon.*
-
-## Reproduction & provenance
-- **[docs/REPRODUCE.md](docs/REPRODUCE.md)** — full end-to-end reproduction with checkpointing, plus deep guides for **GRPO** and **DPO**.
-- **[docs/PROVENANCE.md](docs/PROVENANCE.md)** — who-introduced-what (verified from commits) with code samples and paper provenance (incl. DO-ACP / KRAFTON / RADLADS).
-- **[training/](training/)** — the ported end-to-end training scripts + data mixtures.

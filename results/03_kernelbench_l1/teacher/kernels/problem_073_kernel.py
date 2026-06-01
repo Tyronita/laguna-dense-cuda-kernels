@@ -1,0 +1,199 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+# Custom CUDA implementation for Conv3d transpose
+conv_transpose3d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <cmath>
+
+template<typename T>
+__device__ void load_input_block(const T* input, T* input_block, int n, int batch_idx, int c, int d, int h, int w,
+                                  int in_depth, int in_height, int in_width, int in_channels,
+                                  int k_d, int k_h, int k_w, int stride_d, int stride_h, int stride_w,
+                                  int pad_d, int pad_h, int pad_w) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        int total = in_channels * in_depth * in_height * in_width;
+        if (idx < total) {
+            int wc = idx % in_channels;
+            int tmp = idx / in_channels;
+            int wh = tmp % in_height;
+            int wd = tmp / in_height;
+            int wb = 0; // We only handle batch size 1 for simplicity
+            
+            int d_in = wd - pad_d + (k_d - 1) - (blockIdx.y * blockDim.y);
+            int h_in = wh - pad_h + (k_h - 1) - (blockIdx.z * blockDim.z);
+            int w_in = ww - pad_w + (k_w - 1) - threadIdx.x;
+            
+            if (d_in >= 0 && d_in < in_depth && h_in >= 0 && h_in < in_height && w_in >= 0 && w_in < in_width) {
+                input_block[idx] = input[wb * in_channels * in_depth * in_height * in_width + 
+                                         wc * in_depth * in_height * in_width +
+                                         d_in * in_height * in_width +
+                                         h_in * in_width + w_in];
+            } else {
+                input_block[idx] = T(0);
+            }
+        }
+    }
+}
+
+template<typename T>
+__global__ void conv_transpose3d_kernel(const T* input, const T* weight, const T* bias, T* output,
+                                         int batch_size, int in_channels, int in_depth, int in_height, int in_width,
+                                         int out_channels, int out_depth, int out_height, int out_width,
+                                         int k_d, int k_h, int k_w, int stride_d, int stride_h, int stride_w,
+                                         int pad_d, int pad_h, int pad_w, int groups) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = out_channels * out_depth * out_height * out_width;
+    
+    if (idx < total) {
+        int tmp = idx / out_channels;
+        int ow = idx % out_width;
+        int oh = tmp % out_height;
+        int od = tmp / out_height;
+        int oc = blockIdx.y;
+        
+        T sum = T(0);
+        
+        int g = in_channels / groups;
+        int g_idx = oc / (out_channels / groups);
+        
+        for (int ic = 0; ic < g; ++ic) {
+            int c_in = g_idx * g + ic;
+            
+            for (int kd = 0; kd < k_d; ++kd) {
+                int d_in = od * stride_d - pad_d + kd;
+                if (d_in < 0 || d_in >= in_depth) continue;
+                
+                for (int kh = 0; kh < k_h; ++kh) {
+                    int h_in = oh * stride_h - pad_h + kh;
+                    if (h_in < 0 || h_in >= in_height) continue;
+                      
+                    for (int kw = 0; kw < k_w; ++kw) {
+                        int w_in = ow * stride_w - pad_w + kw;
+                        if (w_in < 0 || w_in >= in_width) continue;
+                        
+                        int w_idx = kd * k_h * k_w + kh * k_w + kw;
+                        T w_val = weight[oc * in_channels * k_d * k_h * k_w + c_in * k_d * k_h * k_w + w_idx];
+                        T x_val = input[c_in * in_depth * in_height * in_width + d_in * in_height * in_width + h_in * in_width + w_in];
+                        sum += w_val * x_val;
+                    }
+                }
+            }
+        }
+        
+        if (bias != nullptr) {
+            sum += bias[oc];
+        }
+        
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor conv_transpose3d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias,
+                                   int stride_d, int stride_h, int stride_w,
+                                   int pad_d, int pad_h, int pad_w, int groups) {
+    auto batch_size = input.size(0);
+    auto in_channels = input.size(1);
+    auto in_depth = input.size(2);
+    auto in_height = input.size(3);
+    auto in_width = input.size(4);
+    
+    auto out_channels = weight.size(0);
+    auto k_d = weight.size(2);
+    auto k_h = weight.size(3);
+    auto k_w = weight.size(4);
+    
+    auto out_depth = (in_depth - 1) * stride_d - 2 * pad_d + k_d;
+    auto out_height = (in_height - 1) * stride_h - 2 * pad_h + k_h;
+    auto out_width = (in_width - 1) * stride_w - 2 * pad_w + k_w;
+    
+    auto output = torch::zeros({batch_size, out_channels, out_depth, out_height, out_width}, input.options());
+    
+    
+    const int block_size = 256;
+    const int num_blocks = (out_channels * out_depth * out_height * out_width + block_size - 1) / block_size;
+    
+    dim3 grid(out_channels, (out_depth + 7) / 8, (out_height + 7) / 8);
+    dim3 block(256);
+    
+    conv_transpose3d_kernel<<<grid, block>>>(
+        input.data_ptr<float>(),
+        weight.data_ptr<float>(),
+        bias.defined() ? bias.data_ptr<float>() : nullptr,
+        output.data_ptr<float>(),
+        batch_size, in_channels, in_depth, in_height, in_width,
+        out_channels, out_depth, out_height, out_width,
+        k_d, k_h, k_w, stride_d, stride_h, stride_w,
+        pad_d, pad_h, pad_w, groups
+    );
+    
+    return output;
+}
+"""
+
+conv_transpose3d_cpp_source = """
+torch::Tensor conv_transpose3d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias,
+                                   int stride_d, int stride_h, int stride_w,
+                                   int pad_d, int pad_h, int pad_w, int groups);
+"""
+
+conv_transpose3d = load_inline(
+    name="conv_transpose3d",
+    cpp_sources=conv_transpose3d_cpp_source,
+    cuda_sources=conv_transpose3d_source,
+    functions=["conv_transpose3d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    Performs a 3D transposed convolution operation with asymmetric input and square kernel.
+    The input is padded before the convolution.
+
+    Args:
+        in_channels (int): Number of channels in the input tensor.
+        out_channels (int): Number of channels produced by the convolution.
+        kernel_size (int): Size of the square convolution kernel.
+        stride (int, optional): Stride of the convolution. Defaults to 1.
+        padding (int, optional): Padding applied to the input. Defaults to 0.
+        groups (int, optional): Number of blocked connections from input channels to output channels. Defaults to 1.
+        bias (bool, optional): If `True`, adds a learnable bias to the output. Defaults to `False`.
+    """
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, output_padding: int = 0, groups: int = 1, bias: bool = False):
+        super(ModelNew, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.groups = groups
+        self.bias = bias
+        
+        # Create weight and bias tensors
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels // groups, kernel_size, kernel_size, kernel_size))
+        if bias:
+            self.bias = nn.Parameter(torch.randn(out_channels))
+        else:
+            self.register_buffer('bias', torch.tensor([]))
+        
+        self.conv_transpose3d = conv_transpose3d
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Performs the 3D transposed convolution.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, in_channels, depth, height, width).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, out_channels, depth_out, height_out, width_out).
+        """
+        return self.conv_transpose3d.conv_transpose3d_cuda(
+            x, self.weight, self.bias,
+            self.stride, self.stride, self.stride,
+            self.padding, self.padding, self.padding,
+            self.groups
+        )

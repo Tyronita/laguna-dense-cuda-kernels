@@ -1,0 +1,55 @@
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.cpp_extension import load_inline
+
+kl_div_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <math.h>
+
+__global__ void kl_div_kernel(const float* log_pred, const float* target, float* output, int batch_size, int num_classes) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < batch_size) {
+        float sum = 0.0f;
+        for (int i = 0; i < num_classes; i++) {
+            float p = target[idx * num_classes + i];
+            float log_p = log_pred[idx * num_classes + i];
+            if (p > 1e-10f) {
+                sum += p * (log_p - log_p);  // p * log(p/q) = p * (log_p - log_q)
+            }
+        }
+        output[idx] = sum;
+    }
+}
+
+torch::Tensor kl_div_cuda(torch::Tensor log_pred, torch::Tensor target) {
+    auto batch_size = target.size(0);
+    auto num_classes = target.size(1);
+    auto out = torch::zeros({batch_size}, target.options());
+    const int block_size = 256;
+    const int num_blocks = (batch_size + block_size - 1) / block_size;
+    kl_div_kernel<<<num_blocks, block_size>>>(log_pred.data_ptr<float>(), target.data_ptr<float>(), out.data_ptr<float>(), batch_size, num_classes);
+    return out.mean();
+}
+"""
+kl_div_cpp_source = "torch::Tensor kl_div_cuda(torch::Tensor log_pred, torch::Tensor target);"
+kl_div = load_inline(name="kl_div", cpp_sources=kl_div_cpp_source, cuda_sources=kl_div_source, functions=["kl_div_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    """
+    A model that computes Kullback-Leibler Divergence for comparing two distributions.
+
+    Parameters:
+        None
+    """
+    def __init__(self):
+        super(Model, self).__init__()
+        self.kl_div = kl_div
+
+    def forward(self, predictions, targets):
+        return self.kl_div.kl_div_cuda(torch.log(predictions), targets)
+```
+</assistant>

@@ -1,0 +1,10 @@
+{
+  "model": "laguna-xs2-teacher",
+  "compiled": 57,
+  "correct": 24,
+  "compile_rate": 0.57,
+  "correct_rate": 0.24,
+  "faster": 4,
+  "avg_speedup": 3.143542843271445,
+  "total": 100
+}

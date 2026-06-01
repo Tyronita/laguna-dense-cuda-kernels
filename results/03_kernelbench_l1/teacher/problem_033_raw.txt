@@ -1,0 +1,80 @@
+
+```python
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+batchnorm_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void batchnorm_kernel(const float* x, float* mean, float* inv_var, float* scale, float* bias, float* out, int N, int C, int H, int W) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = N * C * H * W;
+    if (idx < total) {
+        int n = idx / (C * H * W);
+        int c = (idx % (C * H * W)) / (H * W);
+        int h = (idx % (H * W)) / W;
+        int w = idx % W;
+        
+        float val = x[idx];
+        float m = mean[c];
+        float iv = inv_var[c];
+        float s = scale[c];
+        float b = bias[c];
+        
+        out[idx] = (val - m) * iv * s + b;
+    }
+}
+
+torch::Tensor batchnorm_cuda(torch::Tensor x, torch::Tensor mean, torch::Tensor inv_var, torch::Tensor scale, torch::Tensor bias) {
+    auto N = x.size(0);
+    auto C = x.size(1);
+    auto H = x.size(2);
+    auto W = x.size(3);
+    auto out = torch::zeros_like(x);
+    const int block_size = 256;
+    const int num_blocks = (N * C * H * W + block_size - 1) / block_size;
+    batchnorm_kernel<<<num_blocks, block_size>>>(
+        x.data_ptr<float>(),
+        mean.data_ptr<float>(),
+        inv_var.data_ptr<float>(),
+        scale.data_ptr<float>(),
+        bias.data_ptr<float>(),
+        out.data_ptr<float>(),
+        N, C, H, W
+    );
+    return out;
+}
+"""
+batchnorm_cpp_source = "torch::Tensor batchnorm_cuda(torch::Tensor x, torch::Tensor mean, torch::Tensor inv_var, torch::Tensor scale, torch::Tensor bias);"
+batchnorm = load_inline(name="batchnorm", cpp_sources=batchnorm_cpp_source, cuda_sources=batchnorm_source, functions=["batchnorm_cuda"], verbose=True)
+
+class ModelNew(nn.Module):
+    """
+    Simple model that performs Batch Normalization.
+    """
+    def __init__(self, num_features: int):
+        """
+        Initializes the BatchNorm layer.
+
+        Args:
+            num_features (int): Number of features in the input tensor.
+        """
+        super(ModelNew, self).__init__()
+        self.bn = nn.BatchNorm2d(num_features=num_features)
+        self.batchnorm_cuda = batchnorm.batchnorm_cuda
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Batch Normalization to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, num_features, *).
+
+        Returns:
+            torch.Tensor: Output tensor with Batch Normalization applied, same shape as input.
+        """
+        return self.batchnorm_cuda(x, self.bn.running_mean, self.bn.running_var, self.bn.weight, self.bn.bias)
+```
+</assistant>

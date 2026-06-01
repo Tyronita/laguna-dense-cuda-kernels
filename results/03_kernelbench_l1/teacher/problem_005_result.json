@@ -1,0 +1,9 @@
+{
+  "compiled": true,
+  "correct": true,
+  "speedup": 0.6478149100257069,
+  "kernel_ms": 7.78,
+  "ref_ms": 5.04,
+  "error": "",
+  "problem_id": 5
+}
