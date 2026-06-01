@@ -291,9 +291,50 @@ plugin that reuses `LagunaMLP`. Patch + run command: [`docs/INFERENCE.md`](docs/
 - [ ] **KernelBench L2** (fusion chains) — where >1x speedups are achievable
 - [ ] **pass@k evaluation** — temperature sampling with k=4 may recover more correct kernels
 
-## References
+## References & attribution
 
-RADLADS (arXiv:2505.03005) · Pruning & Distilling MoE into Dense (arXiv:2605.28207) ·
-Sakana AI CUDA Engineer / robust-kbench (arXiv:2509.14279) · KernelBench · DeepSeek-R1 GRPO (arXiv:2501.12948) · Dr.GRPO · DAPO.
+### Base model
+- **Laguna-XS.2** — [poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) · [Poolside AI](https://poolside.ai). The 33B/3B-active MoE teacher model this work densifies. 256 routed experts, top-8 + shared, SwiGLU, 262k context.
+
+### Densification method
+- **RADLADS** — *Routing-Aware Dense Layerwise Approximation for Dense Surrogates* · KRAFTON AI · [arXiv:2505.03005](https://arxiv.org/abs/2505.03005). The DO-ACP warm-start (Gram log-det expert selection) and teacher-forced reconstruction recipe used in Stage 0–1.
+- **Pruning & Distilling MoE into Dense** — [arXiv:2605.28207](https://arxiv.org/abs/2605.28207). Motivation and framing for MoE→dense compression via width-scaled FFN replacement.
+
+### Training data
+- **SakanaAI AI-CUDA-Engineer-Archive** — [SakanaAI/AI-CUDA-Engineer-Archive](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) · [Sakana AI](https://sakana.ai) · [arXiv:2509.14279](https://arxiv.org/abs/2509.14279). The ~30k verified PyTorch→CUDA pairs used for SFT (Stage 2), offline GRPO rewards, and DPO preference pairs (Stage 3). Also the source of the `robust-kbench` anti-reward-hacking methodology.
+- **KernelBook** — [GPUMODE/KernelBook](https://huggingface.co/datasets/GPUMODE/KernelBook) · [GPU MODE](https://gpumode.com). Python→Triton kernel examples (40% of reconstruction mixture).
+- **OpenCodeInstruct** — [nvidia/OpenCodeInstruct](https://huggingface.co/datasets/nvidia/OpenCodeInstruct) · NVIDIA. General Python code-instruct data (30% of reconstruction mixture).
+
+### RL algorithms
+- **GRPO** — *Group Relative Policy Optimization* · DeepSeek · [arXiv:2501.12948](https://arxiv.org/abs/2501.12948). The base RL algorithm: sample G completions per prompt, compute group-relative advantages, policy-gradient update with KL anchor. Used in Stage 3a.
+- **Dr.GRPO** — *Don't Repeat GRPO* · [arXiv:2503.20783](https://arxiv.org/abs/2503.20783). Fix to GRPO's advantage normalization: drops std/length division → unbiased advantage `r − mean(r)`. Prevents length-gaming. Used in both our GRPO and DPO arms.
+- **DAPO** — *Dynamic Sampling Policy Optimization* · [arXiv:2503.14476](https://arxiv.org/abs/2503.14476). Skip zero-variance groups (no learning signal) → saves expensive nvcc compiles. Used in Stage 3a.
+- **RLVR** — *RL with Verifiable Rewards* (Tülu3 / Kimi-k1.5). The principle of using a verifiable function (compile→correct→speedup) rather than a learned reward model. Our Stage 3a reward is fully verifiable.
+- **DPO** — *Direct Preference Optimization* · Rafailov et al. · [arXiv:2305.18290](https://arxiv.org/abs/2305.18290). Loss `−log σ(β·Δlogp)` on preference pairs. Used in Stage 3b.
+
+### Evaluation
+- **KernelBench** — *Can LLMs Write Efficient GPU Kernels?* · Stanford Scaling Intelligence Lab · [arXiv:2502.10517](https://arxiv.org/abs/2502.10517) · [github](https://github.com/ScalingIntelligence/KernelBench) · [kernelbench.com](https://kernelbench.com). The benchmark framework (L1–L4) and eval methodology (subprocess-isolated, `eval_kernel_against_ref`, CUDA event timing) used throughout.
+- **Kevin** — *Cognition + Stanford agentic kernel generation* · [arXiv:2507.11948](https://arxiv.org/abs/2507.11948). Reward hacking taxonomy referenced in our failure analysis.
+
+### Inference
+- **vLLM** — [vllm-project/vllm](https://github.com/vllm-project/vllm). Serving engine with native `laguna.py` for the MoE teacher; dense student via `LagunaDenseFFN` plugin.
+- **torchao** — [pytorch/ao](https://github.com/pytorch/ao). Int8 weight-only quantization (3.21 GB, byte-identical greedy).
+- **HQQ** — *Half-Quadratic Quantization* · [mobiusml/hqq](https://github.com/mobiusml/hqq). 4-bit quantization (~1.7 GB).
+
+### Inline attributions in the training pipeline
+
+| Stage | What we used | From |
+|---|---|---|
+| DO-ACP warm-start | Gram log-det expert selection | RADLADS (KRAFTON) |
+| Reconstruction loss | Normalized MSE + cosine | RADLADS (KRAFTON) |
+| SFT data | Verified PyTorch→CUDA pairs | SakanaAI |
+| GRPO algorithm | Group-relative policy optimization | DeepSeek R1 |
+| Dr.GRPO fix | Unbiased advantage (no std normalization) | Dr.GRPO |
+| DAPO sampling | Skip zero-variance groups | DAPO |
+| Live compilation reward | Subprocess-isolated compile→correct→speedup | SakanaAI robust-kbench |
+| DPO loss | `−log σ(β·Δlogp)` on preference pairs | Rafailov et al. |
+| Eval framework | KernelBench L1 (100 problems, fp32, A100) | Stanford Scaling Intelligence |
+
+---
 
 *Built at the Poolside Laguna XS.2 research hackathon.*
