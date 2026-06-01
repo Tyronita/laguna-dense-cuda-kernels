@@ -39,9 +39,25 @@ Before collapsing the MoE we measured how many of Laguna's **256 routed experts*
 The routed FFN behaves far **denser** than its 256-way capacity → a dense surrogate is viable, and
 **K must exceed top-8**. This motivated **K=8 + DO-ACP warm-start**.
 
+**Per-dataset expert activation** (different code domains use different expert pools):
+
+| Dataset | Kind | Eff. experts/layer | Gini | Expert pool / batch |
+|---|---|---|---|---|
+| magicoder | NL instruction | 183 | 0.425 | 22.5B (72%) |
+| swebench_lite | NL problem | 163 | 0.494 | 20.0B (64%) |
+| *c4 (baseline)* | *web text* | *158* | *0.528* | *19.4B (62%)* |
+| codefeedback | NL query | 151 | 0.519 | 18.5B (59%) |
+| opencodeinstruct | NL to Python | 145 | 0.540 | 17.7B (56%) |
+| **kernelbook** | **Triton src** | **108** | **0.646** | **13.3B (42%)** |
+| **cuda_kernels** | **CUDA src** | **100** | **0.683** | **12.3B (39%)** |
+
+Kernel/CUDA code concentrates onto ~100-108 experts (39-42% of routed weights) vs ~158-183 for
+general text (62-72%). This means a kernel-focused batch touches **half the expert weights** of a
+general batch -- exactly the overhead that MoE-to-dense collapse removes.
+
 ![expert activation](docs/figures/expert_activation.png)
 
-Full analysis: [gist](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · `docs/reports/expert-activation-c4.md`.
+Full analysis: [gist (C4)](https://gist.github.com/Tyronita/fb28e9c31c2b66cccb70fbd939bd1c43) · [gist (per-dataset: KernelBook/CUDA/Magicoder/SWE-bench)](https://gist.github.com/Tyronita/d472e5664dc8291a1dab83f9f3d73fd5) · [gist (C4 detailed visualisations)](https://gist.github.com/Tyronita/cdcb80969d208b83e3f48cddfbbb1422) · `docs/reports/expert-activation-c4.md`.
 
 ---
 
