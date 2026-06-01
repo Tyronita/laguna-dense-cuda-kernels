@@ -17,8 +17,18 @@ All on the Hub under **EvanOLeary** · load with `trust_remote_code=True`.
 |---|---|---|---|
 | **CUDA-SFT** (bf16) | SFT | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft) |
 | **CUDA-SFT** · int8 (torchao) | SFT · quant | 3.21 GB (−46%) | [`EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft-int8) |
-| **CUDA-GRPO** | online GRPO | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo) |
+| **CUDA-GRPO** (online) | Dr.GRPO + live compilation | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft) |
+| **CUDA-GRPO** (offline) | Dr.GRPO on Sakana rewards | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo) |
 | **CUDA-DPO** | DPO | 5.99 GB | [`EvanOLeary/laguna-xs2-dense-k8-cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo) |
+
+**Sample output** (ReLU, greedy) — the GRPO-online model generates a correct CUDA kernel:
+```cuda
+__global__ void relu_kernel(const float* input, float* output, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) output[idx] = input[idx] > 0.0f ? input[idx] : 0.0f;
+}
+```
+0.91× PyTorch eager on A100 (memory-bandwidth-bound — speedups need operator fusion).
 
 📊 Full graph index: **[docs/GRAPHS.md](docs/GRAPHS.md)** · 📓 Ablation log: **[docs/ABLATIONS.md](docs/ABLATIONS.md)**
 
@@ -103,7 +113,8 @@ poolside/Laguna-XS.2 (33B/3B-active MoE, 256 experts)
    │ Stage 0  DO-ACP warm-start (Gram log-det select 8 experts → concat)
    │ Stage 1  teacher-forced reconstruction on KERNEL mixture  → V2 checkpoint
    │ Stage 2  SFT on SakanaAI CUDA (correct kernels only)     → cuda-sft
-   │ Stage 3a GRPO-online (Dr.GRPO + live compilation reward)  → cuda-grpo
+   │ Stage 3a GRPO-online (Dr.GRPO + live compilation reward)  → cuda-rft
+   │ Stage 3a′ GRPO-offline (Dr.GRPO on Sakana dataset rewards) → cuda-grpo
    ▼ Stage 3b DPO (preference pairs from Sakana traces)        → cuda-dpo
 ```
 
@@ -163,7 +174,7 @@ Attention, embeddings, and norms are frozen.
 
 ![sft curve](docs/figures/sft_curve.png)
 
-### Stage 3a — GRPO-online (Dr.GRPO + live compilation) (`scripts/003_grpo.py`)
+### Stage 3a — GRPO-online (`scripts/003_grpo.py`) → [`cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft)
 
 Per prompt, sample 6 kernels → **actually compile + run** each in a subprocess → reward from verification.
 
@@ -177,6 +188,29 @@ Per prompt, sample 6 kernels → **actually compile + run** each in a subprocess
 | Steps / group size | 24 / 6 |
 | LR / temperature | 1e-6 / 0.9 |
 | Tasks | elementwise ops (relu, sigmoid, tanh, gelu, silu, softplus) |
+
+### Stage 3a′ — GRPO-offline (`scripts/003_grpo_offline.py`) → [`cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo)
+
+**No live compilation** — reward read directly from [`SakanaAI/AI-CUDA-Engineer-Archive`](https://huggingface.co/datasets/SakanaAI/AI-CUDA-Engineer-Archive) columns:
+- `Correct` (bool) — gates the reward
+- `CUDA_Speedup_Native` (float) — speedup vs PyTorch eager
+
+`reward = CUDA_Speedup_Native if Correct else 0.0`
+
+Groups ~6 candidate kernels per `Task_ID` from levels 1+2, picks 2 best + 2 worst + random middle
+for high-variance groups (better learning signal).
+
+| | Value |
+|---|---|
+| **Algorithm** | Dr.GRPO (same as online) |
+| **Reward source** | Pre-recorded `Correct` + `CUDA_Speedup_Native` columns |
+| **Sampling** | DAPO dynamic (skip zero-variance groups) |
+| **KL anchor** | β=0.02 to SFT reference |
+| **Trainable** | `routed_dense` + `lm_head` |
+| Steps / group size | 120 / 6 |
+| Max tasks / splits | 120 tasks from `level_1,level_2` |
+| LR | 1e-6 |
+| **Limitation** | Off-policy — sharpens toward Sakana's best traces but cannot exceed the dataset |
 
 ### Stage 3b — DPO (preference pairs) (`scripts/004_dpo.py`)
 
@@ -212,7 +246,8 @@ Greedy decoding (temperature=0), pass@1, subprocess-isolated evaluation on A100 
 | Model | Params | Compile | Correct (fast_0) | Faster (fast_1) | Avg Speedup |
 |---|---|---|---|---|---|
 | **Teacher** ([Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2)) | **33B MoE** | 57% | **24%** | **4%** | 3.1x |
-| **GRPO-online** ([`cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo)) | 3B dense | 23% | 10% | 1% | 14.6x* |
+| **GRPO-online** ([`cuda-rft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-rft)) | 3B dense | 23% | 10% | 1% | 14.6x* |
+| **GRPO-offline** ([`cuda-grpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-grpo)) | 3B dense | 19% | 9% | 1% | 8.5x* |
 | **DPO** ([`cuda-dpo`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-dpo)) | 3B dense | 27% | 2% | 0% | 0.6x |
 | **SFT** ([`cuda-sft`](https://huggingface.co/EvanOLeary/laguna-xs2-dense-k8-cuda-sft)) | 3B dense | 27% | 0% | 0% | — |
 
