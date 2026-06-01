@@ -335,6 +335,40 @@ The student is **2.6x faster** single-seq (compiled) and **98x faster** batched 
 - Trained on code (details not public), 100,352 vocab with chat template
 - The model that our dense student is distilled from
 
+### Sample generated kernels — teacher vs student
+
+**P12 — Diagonal matmul (both correct, student 143x / teacher 61x):**
+
+Both models recognise that  is elementwise row-scaling. The teacher outputs clean
+Python with ; the student outputs raw C++ (wrapped by our eval harness).
+
+<details><summary>Teacher (61.2x speedup) — Python + load_inline, 2D grid</summary>
+
+
+</details>
+
+<details><summary>Student GRPO-online (143x speedup) — flat 1D index, slightly faster</summary>
+
+
+</details>
+
+The student's flat 1D indexing avoids the 2D grid overhead and is ~2.3x faster. Both are correct.
+
+**P30 — Softsign (teacher only, 2.24x speedup):**
+
+The teacher beats PyTorch eager because  goes through Python dispatch overhead;
+the CUDA kernel is a single fused :
+
+
+
+The student cannot generate this — it was never trained on Softsign CUDA.
+
+**P19 — ReLU (student 0.91x, teacher 0.65x):**
+
+Both write correct ReLU kernels but neither beats PyTorch eager (memory-bandwidth-bound).
+The student's version is closer to parity (0.91x vs 0.65x) — likely because GRPO optimised
+specifically for ReLU during training.
+
 Full per-problem results: [`results/03_kernelbench_l1/`](results/03_kernelbench_l1/)
 
 ---
