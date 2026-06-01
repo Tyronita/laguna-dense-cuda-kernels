@@ -18,7 +18,7 @@ A **~3.0 B fully-dense** model that generates **CUDA / Triton GPU kernels** from
 | **Student** | **~3.0 B dense** (1 SwiGLU FFN per layer, K=8 width) — 5.99 GB bf16 |
 | **Method** | DO-ACP warm-start → reconstruction (kernel mix) → CUDA SFT → GRPO/DPO |
 | **vs teacher** | **11× fewer params, 12× less VRAM, +26 % faster decode** (32.1 vs 25.4 tok/s) |
-| **Status** | SFT + GRPO + DPO done; **10% correct on KernelBench L1** (pass@1); 1% fast_1 |
+| **Status** | SFT + GRPO + DPO done; **10% correct on L1** (3B student) vs **24% teacher**; densification gap identified |
 
 ## Pipeline / lineage
 ```
@@ -164,20 +164,26 @@ Full evaluation on [KernelBench](https://github.com/ScalingIntelligence/KernelBe
 (100 single-operator problems: matmul, conv, activations, norms, pooling, reductions, losses).
 Greedy decoding (temperature=0), single attempt per problem, subprocess-isolated evaluation.
 
-| Model | Method | Compile | Correct (fast_0) | Faster (fast_1) | Avg Speedup |
-|---|---|---|---|---|---|
-| **GRPO-online** | Dr.GRPO + live compilation | 23% | **10%** | **1%** | 14.6x* |
-| **GRPO-offline** | Dr.GRPO on Sakana rewards | 19% | **9%** | **1%** | 8.5x* |
-| **DPO** | DPO on Sakana preferences | 27% | 2% | 0% | 0.55x |
-| **SFT-v2** | SFT (level 1+2+3, +500 steps) | 21% | 0% | 0% | — |
-| **SFT-v1** | SFT (level 1+2, 400 steps) | 27% | 0% | 0% | — |
+| Model | Params | Method | Compile | Correct (fast_0) | Faster (fast_1) | Avg Speedup |
+|---|---|---|---|---|---|---|
+| **Teacher** | **33B MoE** | (baseline) | 57% | **24%** | **4%** | 3.1x |
+| **GRPO-online** | 3B dense | Dr.GRPO + live compilation | 23% | 10% | 1% | 14.6x* |
+| **GRPO-offline** | 3B dense | Dr.GRPO on Sakana rewards | 19% | 9% | 1% | 8.5x* |
+| **DPO** | 3B dense | DPO on Sakana preferences | 27% | 2% | 0% | 0.55x |
+| **SFT-v2** | 3B dense | SFT (level 1+2+3, +500 steps) | 21% | 0% | 0% | — |
+| **SFT-v1** | 3B dense | SFT (level 1+2, 400 steps) | 27% | 0% | 0% | — |
 
 *Avg speedup inflated by P12 (diagonal matmul, 72-143x algorithmic optimization — legitimate).
 
-**Key finding: RL is essential for correctness.** SFT models compile (21-27%) but achieve 0%
-correctness. GRPO reward (compile + correct + speedup) teaches the model to produce numerically
-correct kernels. Online GRPO (live compilation, 24 steps) slightly outperforms offline
-(dataset rewards, 120 steps).
+**Key findings:**
+1. **The 33B MoE teacher scores 24% correct** — significantly better than all 3B dense students.
+   Densification lost kernel-writing capability that GRPO only partially recovered on the narrow
+   set of ops it was trained on. The teacher uniquely solves 17 ops the best student cannot
+   (Sigmoid, Softmax, Swish 1.58x, Softsign 2.24x, ELU, HardSigmoid, L1Norm, etc).
+2. **RL is essential for the dense student.** SFT models compile (21-27%) but achieve 0% correctness.
+   GRPO reward (compile + correct + speedup) is what teaches the 3B model to produce correct kernels.
+3. **The student wins on matmul variants** (P1, P10, P11) — the ops GRPO was trained on —
+   but fails on everything else the teacher can do. More diverse SFT/GRPO data is the clear next step.
 
 ### 7b · Comparison to frontier models (from [KernelBench paper](https://arxiv.org/abs/2502.10517))
 

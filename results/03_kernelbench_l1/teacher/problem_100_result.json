@@ -4,6 +4,6 @@
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "CUDA out of memory. Tried to allocate 4.00 GiB. GPU 0 has a total capacity of 79.25 GiB of which 225.12 MiB is free. Process 1111490 has 62.79 GiB memory in use. Process 1123712 has 3.73 GiB memory in use. Including non-PyTorch memory, this process has 12.48 GiB memory in use. Of the allocated memory 12.00 GiB is allocated by PyTorch, and 1.75 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to av",
+  "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
   "problem_id": 100
 }
