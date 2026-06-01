@@ -59,6 +59,6 @@ class Model(nn.Module):
 ## Failure taxonomy
 | Category | Ops affected | Fix |
 |---|---|---|
-| float4 cast bugs | Sigmoid, GeLU | RFT compile reward |
+| float4 cast bugs | Sigmoid, GeLU | GRPO compile reward |
 | Deprecated API (`input.type()`) | Various | Prompt hint (already in system prompt) |
 | Over-generation (1024 tok exhausted) | Complex ops | raise max_tokens or stop-on-``` |

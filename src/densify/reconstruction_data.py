@@ -4,16 +4,6 @@ import json
 from typing import Any
 
 
-def _coerce_messages(value: Any) -> Any:
-    """Some datasets (e.g. KernelBook) store messages as a JSON string."""
-    if isinstance(value, str):
-        try:
-            return json.loads(value)
-        except (ValueError, TypeError):
-            return None
-    return value
-
-
 def _as_text(value: Any) -> str:
     if value is None:
         return ""
@@ -26,49 +16,85 @@ def _format_role(role: str, content: str) -> str:
     return f"<{tag}>\n{content.strip()}\n</{tag}>"
 
 
+def _tool_arguments(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {"_raw": value}
+        return parsed if isinstance(parsed, dict) else {"value": parsed}
+    if value is None:
+        return {}
+    return {"value": value}
+
+
+def _format_tool_call(call: dict[str, Any]) -> str:
+    function = call.get("function") if isinstance(call, dict) else None
+    if not isinstance(function, dict):
+        return ""
+    name = _as_text(function.get("name"))
+    if not name:
+        return ""
+    args = _tool_arguments(function.get("arguments"))
+    lines = ["<tool_call>", name]
+    for key, value in args.items():
+        if isinstance(value, (dict, list)):
+            rendered = json.dumps(value, sort_keys=True)
+        else:
+            rendered = _as_text(value)
+        lines.extend(
+            [
+                f"<arg_key>{key}</arg_key>",
+                f"<arg_value>{rendered}</arg_value>",
+            ]
+        )
+    lines.append("</tool_call>")
+    return "\n".join(lines)
+
+
+def _format_message(message: dict[str, Any]) -> str:
+    role = _as_text(message.get("role", "user"))
+    content_parts = []
+    content = _as_text(message.get("content"))
+    if content:
+        content_parts.append(content)
+    if role.lower().strip() == "assistant":
+        for call in message.get("tool_calls") or []:
+            if isinstance(call, dict):
+                rendered = _format_tool_call(call)
+                if rendered:
+                    content_parts.append(rendered)
+    if not content_parts:
+        return ""
+    return _format_role(role, "\n".join(content_parts))
+
+
 def format_sft_row(row: dict[str, Any]) -> str:
-    messages = _coerce_messages(row.get("messages") or row.get("full_messages"))
+    messages = row.get("messages")
     if isinstance(messages, list) and messages:
         parts = []
         for message in messages:
             if not isinstance(message, dict):
                 continue
-            content = _as_text(message.get("content"))
-            if content:
-                parts.append(_format_role(_as_text(message.get("role", "user")), content))
+            rendered = _format_message(message)
+            if rendered:
+                parts.append(rendered)
         if parts:
             return "\n".join(parts)
 
-    instruction = _as_text(
-        row.get("instruction") or row.get("prompt") or row.get("question") or row.get("query")
-    )
+    instruction = _as_text(row.get("instruction") or row.get("prompt") or row.get("question"))
     extra_input = _as_text(row.get("input"))
-    output = _as_text(row.get("output") or row.get("completion") or row.get("response") or row.get("answer"))
+    output = _as_text(
+        row.get("output") or row.get("completion") or row.get("response") or row.get("answer")
+    )
     if extra_input:
         instruction = f"{instruction}\n\n{extra_input}" if instruction else extra_input
     if instruction and output:
         return f"<user>\n{instruction}\n</user>\n<assistant>\n{output}\n</assistant>"
 
-    # Kernel datasets: PyTorch module -> Triton/CUDA kernel pair.
-    # (GPUMODE/KernelBook -> Triton; SakanaAI/AI-CUDA-Engineer-Archive -> CUDA C++)
-    py = _as_text(
-        row.get("python_code") or row.get("pytorch_code")
-        or row.get("PyTorch_Code_Module") or row.get("PyTorch_Code_Functional")
-    )
-    triton = _as_text(row.get("triton_code") or row.get("final_triton_code"))
-    cuda = _as_text(row.get("CUDA_Code") or row.get("cuda_code"))
-    if py and triton:
-        return (
-            "<user>\nConvert this PyTorch module into an optimized Triton kernel:\n"
-            f"{py}\n</user>\n<assistant>\n{triton}\n</assistant>"
-        )
-    if py and cuda:
-        return (
-            "<user>\nConvert this PyTorch module into an optimized CUDA kernel:\n"
-            f"{py}\n</user>\n<assistant>\n{cuda}\n</assistant>"
-        )
-
-    text = _as_text(row.get("text") or row.get("content") or row.get("kernel") or row.get("code"))
+    text = _as_text(row.get("text") or row.get("content"))
     if text:
         return text
     raise ValueError(f"Could not format SFT row with keys: {sorted(row)}")

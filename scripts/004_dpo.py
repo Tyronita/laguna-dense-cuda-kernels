@@ -1,4 +1,4 @@
-"""DPO on the SakanaAI CUDA Engineer Archive traces (offline RFT).
+"""DPO on the SakanaAI CUDA Engineer Archive traces (offline preference / DPO).
 
 Exploits the archive's evolutionary refinement trajectory: per task, PREFER a
 correct+fast kernel over an incorrect/slow one, using the recorded verified labels

@@ -30,19 +30,6 @@ Full evaluation of all model variants on [KernelBench](https://github.com/Scalin
 | **Ours (GRPO-online, 3B)** | **3B** | **1%** | - | - |
 | **Ours (GRPO-offline, 3B)** | **3B** | **1%** | - | - |
 
-### vs Smoke Test (Section 7b of main README)
-
-The earlier smoke test used a different setup — included here for context:
-
-| | Smoke Test (DPO) | KernelBench L1 (this eval) |
-|---|---|---|
-| Model | DPO | All 5 variants |
-| Problems | 10 elementwise ops | 100 L1 problems (matmul, conv, norm, pool, loss...) |
-| Prompt | Expert system prompt + API hints | One-shot KernelBench format |
-| Sampling | temp=0.6, top_k=20, pass@3 | Greedy pass@1 |
-| ReLU correct | 2/3 (67%) | GRPO: 1/1 (100%) |
-| Tanh correct | 2/3 (67%) | GRPO: 1/1 (100%) |
-
 The L1 eval is much harder (100 diverse ops vs 10 elementwise) with stricter sampling (greedy vs best-of-3).
 
 ## Discussion

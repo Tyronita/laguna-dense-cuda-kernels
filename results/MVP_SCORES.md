@@ -11,7 +11,7 @@ Models: SFT(base) · SFT-ext · GRPO · DPO · Laguna-teacher. Reward = compile 
 | DPO | 6/6 | 3/6 | 0.917 |
 | Laguna-teacher | 0/6 | 0/6 | None |
 
-> **DPO is the best of our models (6/6 compile, 3/6 correct).** Both RFT arms (GRPO, DPO) recovered
+> **DPO is the best of our models (6/6 compile, 3/6 correct).** Both GRPO arms (GRPO, DPO) recovered
 > the SFT-extended regression (0/6) and beat base SFT. **Teacher 0/6 is a prompt-format artifact** —
 > the short version-pin prompt fits our chat-tuned models; Laguna scored 4/6 in the earlier head-to-head
 > with its own format. Not a clean DPO>teacher claim.
