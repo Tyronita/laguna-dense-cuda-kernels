@@ -204,6 +204,90 @@ Greedy decoding (temperature=0), pass@1, subprocess-isolated evaluation on A100 
 | Illegal memory access | 7 | 5 |
 | Other | 15 | 14 |
 
+### Eval methodology
+
+**Prompt template** (one-shot, same for all models):
+```
+You write custom CUDA operators to replace the pytorch operators in the
+given architecture to get speedups.
+
+Here's an example to show you the syntax of inline embedding custom CUDA
+operators in PyTorch:
+
+Input architecture:
+  [elementwise add Model class]
+
+Optimized with CUDA operators:
+  [load_inline example with CUDA kernel + ModelNew class]
+
+You are given the following architecture:
+  [KernelBench reference code]
+
+Optimize the architecture named Model with custom CUDA operators!
+Name your optimized output architecture ModelNew.
+```
+
+**Settings**: greedy (temperature=0), max_new_tokens=2048, chat template with `<user>/<assistant>` tags, `</assistant>` as stop token.
+
+**Eval**: KernelBench `eval_kernel_against_ref` -- 5 correctness trials (random inputs, `atol=rtol=1e-4`), 100 timing trials (CUDA events), subprocess-isolated.
+
+### Per-problem results (teacher vs best student)
+
+| PID | Problem | Teacher (33B) | GRPO-online (3B) |
+|---|---|---|---|
+| 1 | Square matmul | COMPILED | **OK 0.03x** |
+| 5 | Matrix scalar mul | **OK 0.65x** | FAIL |
+| 7 | Small-K matmul | **OK 0.17x** | COMPILED |
+| 8 | Irregular matmul | **OK 0.13x** | **OK 0.13x** |
+| 9 | Tall-skinny matmul | **OK 0.18x** | **OK 0.24x** |
+| 10 | 3D tensor matmul | COMPILED | **OK 0.12x** |
+| 11 | 4D tensor matmul | COMPILED | **OK 0.21x** |
+| 12 | Diagonal matmul | **OK 61.2x** | **OK 143.0x** |
+| 13 | Symmetric matmul | **OK 0.12x** | COMPILED |
+| 14 | Upper-triangular | **OK 1.06x** | COMPILED |
+| 15 | Lower-triangular | **OK 0.29x** | COMPILED |
+| 17 | Transposed-B matmul | **OK 0.03x** | **OK 0.17x** |
+| 19 | ReLU | **OK 0.65x** | **OK 0.91x** |
+| 20 | LeakyReLU | **OK 0.65x** | COMPILED |
+| 21 | Sigmoid | **OK 0.63x** | FAIL |
+| 22 | Tanh | **OK 0.62x** | **OK 0.83x** |
+| 23 | Softmax | **OK 0.53x** | FAIL |
+| 24 | LogSoftmax | **OK 0.62x** | COMPILED |
+| 25 | Swish | **OK 1.58x** | FAIL |
+| 26 | GELU | **OK 0.58x** | FAIL |
+| 28 | HardSigmoid | **OK 0.64x** | FAIL |
+| 29 | Softplus | **OK 0.58x** | FAIL |
+| 30 | Softsign | **OK 2.24x** | FAIL |
+| 31 | ELU | **OK 0.65x** | FAIL |
+| 32 | HardTanh | **OK 0.65x** | COMPILED |
+| 38 | L1Norm | **OK** | FAIL |
+| 99 | TripletMarginLoss | **OK 0.83x** | FAIL |
+
+**Teacher uniquely correct (17)**: P5, P7, P13-15, P20-21, P23-26, P28-32, P38, P99
+**Student uniquely correct (3)**: P1, P10, P11
+**Both correct (7)**: P8, P9, P12, P17, P19, P22
+
+### Teacher inference speed
+
+| Model | Params | VRAM | tok/s (A100) |
+|---|---|---|---|
+| Teacher (Laguna-XS.2 MoE) | 33B total / 3B active | 67 GB | 12.5 |
+| Student (dense bf16) | 3B | 6 GB | 15.4 (eager) / 32.9 (compiled) |
+| Student (int8 torchao) | 3B | 3.2 GB | ~10 (eager) / ~22 (compiled) |
+| Student (vLLM batched x64) | 3B | 6 GB | 1,227 aggregate |
+
+The student is **2.6x faster** single-seq (compiled) and **98x faster** batched vs the teacher -- while fitting in 10x less VRAM.
+
+### About the teacher -- Laguna-XS.2
+
+[poolside/Laguna-XS.2](https://huggingface.co/poolside/Laguna-XS.2) is a **33.4B parameter MoE** code model by [Poolside AI](https://poolside.ai):
+- **256 routed experts**, top-8 routing + 1 shared expert per layer -> **3B active** per token
+- 40 layers, 2048 hidden, 48/8 GQA heads, 262k context
+- Sigmoid routing activation (not softmax), SwiGLU FFN
+- 30 sliding-window attention layers + 10 full-attention layers
+- Trained on code (details not public), 100,352 vocab with chat template
+- The model that our dense student is distilled from
+
 Full per-problem results: [`results/03_kernelbench_l1/`](results/03_kernelbench_l1/)
 
 ---
