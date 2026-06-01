@@ -1,9 +1,9 @@
 {
-  "problem_id": 84,
   "compiled": false,
   "correct": false,
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "no raw output file"
+  "error": "Syntax error in custom generated code or ModelNew not found",
+  "problem_id": 84
 }

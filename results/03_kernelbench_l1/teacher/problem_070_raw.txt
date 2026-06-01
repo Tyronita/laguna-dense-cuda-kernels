@@ -1,0 +1,141 @@
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.cpp_extension import load_inline
+
+conv_transpose3d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+template<typename T>
+__device__ void load_input_block(const T* input, int n, int d, int h, int w, int c, int in_depth, int in_height, int in_width, T* block) {
+    int idx = threadIdx.x;
+    int total_elements = n * in_depth * in_height * in_width * in_channels;
+    for (int i = idx; i < total_elements; i += blockDim.x) {
+        block[i] = input[i];
+    }
+}
+
+__global__ void conv_transpose3d_kernel(const float* input, float* output, const float* weight, const float* bias,
+                                        int batch_size, int in_channels, int out_channels,
+                                        int in_depth, int in_height, int in_width,
+                                        int out_depth, int out_height, int out_width,
+                                        int kernel_size, int stride, int padding, int output_padding,
+                                        int dilation, int groups) {
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * out_channels * out_depth * out_height * out_width;
+    
+    if (idx >= total_elements) return;
+    
+    int temp = idx;
+    int ow = temp % out_width; temp /= out_width;
+    int oh = temp % out_height; temp /= out_height;
+    int od = temp % out_depth; temp /= out_depth;
+    int oc = temp % out_channels; temp /= out_channels;
+    int n = temp;
+    
+    int g = oc / (out_channels / groups);
+    int out_c = oc % (out_channels / groups);
+    
+    float sum = 0.0f;
+    
+    for (int kt = 0; kt < kernel_size; kt++) {
+        for (int kh = 0; kh < kernel_size; kh++) {
+            for (int kw = 0; kw < kernel_size; kw++) {
+                int it = (od * stride - padding) + kt * dilation;
+                int ih = (oh * stride - padding) + kh * dilation;
+                int iw = (ow * stride - padding) + kw * dilation;
+                
+                if (it >= 0 && it < in_depth && ih >= 0 && ih < in_height && iw >= 0 && iw < in_width) {
+                    for (int kt_idx = 0; kt_idx < kernel_size; kt_idx++) {
+                        for (int kh_idx = 0; kh_idx < kernel_size; kh_idx++) {
+                            for (int kw_idx = 0; kw_idx < kernel_size; kw_idx++) {
+                                int in_c = g * (in_channels / groups) + out_c;
+                                int w_idx = ((kt * kernel_size + kh) * kernel_size + kw) * (in_channels / groups) + out_c;
+                                int in_idx = ((n * in_depth + it) * in_height + ih) * in_width + iw;
+                                sum += input[in_idx] * weight[w_idx];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (bias != nullptr) {
+        sum += bias[oc];
+    }
+    
+    int out_idx = ((n * out_channels + oc) * out_depth + od) * out_height + oh * out_width + ow;
+    output[out_idx] = sum;
+}
+
+torch::Tensor conv_transpose3d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias,
+                                   int stride, int padding, int output_padding, int dilation, int groups) {
+    auto batch_size = input.size(0);
+    auto in_channels = input.size(1);
+    auto in_depth = input.size(2);
+    auto in_height = input.size(3);
+    auto in_width = input.size(4);
+    
+    auto out_channels = weight.size(0);
+    auto kernel_size = weight.size(2);
+    
+    auto out_depth = (in_depth - 1) * stride + kernel_size - 2 * padding + output_padding;
+    auto out_height = (in_height - 1) * stride + kernel_size - 2 * padding + output_padding;
+    auto out_width = (in_width - 1) * stride + kernel_size - 2 * padding + output_padding;
+    
+    auto output = torch::zeros({batch_size, out_channels, out_depth, out_height, out_width}, input.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (batch_size * out_channels * out_depth * out_height * out_width + block_size - 1) / block_size;
+    
+    conv_transpose3d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(), output.data_ptr<float>(), weight.data_ptr<float>(),
+        bias.defined() ? bias.data_ptr<float>() : nullptr,
+        batch_size, in_channels, out_channels, in_depth, in_height, in_width,
+        out_depth, out_height, out_width, kernel_size, stride, padding, output_padding, dilation, groups
+    );
+    
+    return output;
+}
+"""
+
+conv_transpose3d_cpp_source = "torch::Tensor conv_transpose3d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias, int stride, int padding, int output_padding, int dilation, int groups);"
+
+conv_transpose3d = load_inline(
+    name="conv_transpose3d",
+    cpp_sources=conv_transpose3d_cpp_source,
+    cuda_sources=conv_transpose3d_source,
+    functions=["conv_transpose3d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, output_padding: int = 0,
+                 dilation: int = 1, groups: int = 1, bias: bool = False):
+        super(ModelNew, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+        self.output_padding = output_padding
+        self.dilation = dilation
+        self.groups = groups
+        
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels // groups, kernel_size, kernel_size, kernel_size))
+        if bias:
+            self.bias = nn.Parameter(torch.randn(out_channels))
+        else:
+            self.bias = None
+        
+        self.conv_transpose3d = conv_transpose3d
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv_transpose3d.conv_transpose3d_cuda(x, self.weight, self.bias, self.stride, self.padding, self.output_padding, self.dilation, self.groups)
+```
+</assistant>

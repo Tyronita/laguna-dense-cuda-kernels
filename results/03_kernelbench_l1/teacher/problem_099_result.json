@@ -1,9 +1,9 @@
 {
-  "problem_id": 99,
-  "compiled": false,
-  "correct": false,
-  "speedup": 0.0,
-  "kernel_ms": -1,
-  "ref_ms": -1,
-  "error": "no raw output file"
+  "compiled": true,
+  "correct": true,
+  "speedup": 0.8270925110132158,
+  "kernel_ms": 9.08,
+  "ref_ms": 7.51,
+  "error": "",
+  "problem_id": 99
 }

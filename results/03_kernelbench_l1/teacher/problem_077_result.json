@@ -1,9 +1,9 @@
 {
-  "problem_id": 77,
   "compiled": false,
   "correct": false,
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "no raw output file"
+  "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n",
+  "problem_id": 77
 }

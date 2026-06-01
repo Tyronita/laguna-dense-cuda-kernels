@@ -1,9 +1,9 @@
 {
-  "problem_id": 72,
   "compiled": false,
   "correct": false,
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "no raw output file"
+  "error": "eval returned None",
+  "problem_id": 72
 }

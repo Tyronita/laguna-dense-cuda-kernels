@@ -4,6 +4,6 @@
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "Error building extension 'conv3d'",
+  "error": "\"attribute 'bias' already exists\"",
   "problem_id": 60
 }

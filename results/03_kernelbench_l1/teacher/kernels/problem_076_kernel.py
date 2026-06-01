@@ -1,0 +1,100 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+conv1d_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+
+__global__ void conv1d_kernel(const float* input, const float* weight, const float* bias, float* output,
+                              int batch_size, int in_channels, int out_channels, int input_length, int output_length,
+                              int kernel_size, int stride, int dilation, int pad_left, int pad_right) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total_elements = batch_size * out_channels * output_length;
+    if (idx >= total_elements) return;
+
+    int n = idx / (out_channels * output_length);
+    int oc = (idx / output_length) % out_channels;
+    int ol = idx % output_length;
+
+    float sum = bias != nullptr ? bias[oc] : 0.0f;
+    
+    for (int ic = 0; ic < in_channels; ic++) {
+        int input_center = ol * stride - pad_left;
+        int weight_offset = ic * kernel_size;
+        
+        for (int k = 0; k < kernel_size; k++) {
+            int input_pos = input_center + k * dilation;
+            if (input_pos >= 0 && input_pos < input_length) {
+                sum += input[n * in_channels * input_length + ic * input_length + input_pos] * weight[weight_offset + k];
+            }
+        }
+    }
+    
+    output[idx] = sum;
+}
+
+torch::Tensor conv1d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias, int stride, int dilation) {
+    auto batch_size = input.size(0);
+    auto in_channels = input.size(1);
+    auto input_length = input.size(2);
+    auto out_channels = weight.size(0);
+    auto kernel_size = weight.size(2);
+    
+    int pad_left = dilation * (kernel_size - 1) / 2;
+    int pad_right = dilation * (kernel_size - 1) / 2;
+    int output_length = (input_length + stride - 1) / stride;
+    
+    auto output = torch::zeros({batch_size, out_channels, output_length}, input.options());
+    
+    const int block_size = 256;
+    const int total_elements = batch_size * out_channels * output_length;
+    const int num_blocks = (total_elements + block_size - 1) / block_size;
+    
+    conv1d_kernel<<<num_blocks, block_size>>>(
+        input.data_ptr<float>(), weight.data_ptr<float>(), 
+        bias.defined() ? bias.data_ptr<float>() : nullptr,
+        output.data_ptr<float>(),
+        batch_size, in_channels, out_channels, input_length, output_length,
+        kernel_size, stride, dilation, pad_left, pad_right
+    );
+    
+    return output;
+}
+"""
+
+conv1d_cpp_source = "torch::Tensor conv1d_cuda(torch::Tensor input, torch::Tensor weight, torch::Tensor bias, int stride, int dilation);"
+
+conv1d = load_inline(
+    name="conv1d",
+    cpp_sources=conv1d_cpp_source,
+    cuda_sources=conv1d_source,
+    functions=["conv1d_cuda"],
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, dilation: int = 1, bias: bool = False):
+        super(ModelNew, self).__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.dilation = dilation
+        
+        self.weight = nn.Parameter(torch.empty(out_channels, in_channels, kernel_size))
+        if bias:
+            self.bias = nn.Parameter(torch.empty(out_channels))
+        else:
+            self.register_buffer('bias', None)
+        
+        self.reset_parameters()
+        self.conv1d = conv1d
+
+    def reset_parameters(self):
+        nn.init.kaiming_normal_(self.weight, mode='fan_out', nonlinearity='relu')
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv1d.conv1d_cuda(x, self.weight, self.bias, self.stride, self.dilation)

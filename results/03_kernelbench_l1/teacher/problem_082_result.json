@@ -1,9 +1,9 @@
 {
-  "problem_id": 82,
-  "compiled": false,
+  "compiled": true,
   "correct": false,
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "no raw output file"
+  "error": "correctness check failed",
+  "problem_id": 82
 }

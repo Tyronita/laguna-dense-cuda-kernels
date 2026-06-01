@@ -1,9 +1,9 @@
 {
-  "problem_id": 68,
   "compiled": false,
   "correct": false,
   "speedup": 0.0,
   "kernel_ms": -1,
   "ref_ms": -1,
-  "error": "no raw output file"
+  "error": "Error building extension 'conv_transpose3d'",
+  "problem_id": 68
 }

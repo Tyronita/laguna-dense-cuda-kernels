@@ -1,0 +1,84 @@
+import torch
+import torch.nn as nn
+from torch.utils.cpp_extension import load_inline
+
+triplet_margin_loss_source = """
+#include <torch/extension.h>
+#include <cuda_runtime.h>
+#include <math.h>
+
+__global__ void compute_positional_encoding_kernel(const float* input, float* output, int batch_size, int feature_dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch_size * feature_dim;
+    if (idx < total) {
+        int b = idx / feature_dim;
+        int d = idx % feature_dim;
+        float val = input[idx];
+        output[idx] = val * sin(val * (d + 1) * 3.14159265358979323846 / 1000.0);
+    }
+}
+
+__global__ void triplet_margin_loss_kernel(const float* anchor, const float* positive, const float* negative, float margin, float* loss, int batch_size, int feature_dim) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < batch_size) {
+        float pos_dist = 0.0f;
+        float neg_dist = 0.0f;
+        for (int d = 0; d < feature_dim; d++) {
+            float diff = anchor[idx * feature_dim + d] - positive[idx * feature_dim + d];
+            pos_dist += diff * diff;
+            diff = anchor[idx * feature_dim + d] - negative[idx * feature_dim + d];
+            neg_dist += diff * diff;
+        }
+        pos_dist = sqrtf(pos_dist) + 1e-12f;
+        neg_dist = sqrtf(neg_dist) + 1e-12f;
+        float diff = pos_dist - neg_dist + margin;
+        loss[idx] = diff > 0 ? diff : 0.0f;
+    }
+}
+
+torch::Tensor triplet_margin_loss_cuda(torch::Tensor anchor, torch::Tensor positive, torch::Tensor negative, float margin) {
+    auto batch_size = anchor.size(0);
+    auto feature_dim = anchor.size(1);
+    auto loss = torch::zeros({batch_size}, anchor.options());
+    
+    const int block_size = 256;
+    const int num_blocks = (batch_size + block_size - 1) / block_size;
+    
+    triplet_margin_loss_kernel<<<num_blocks, block_size>>>(
+        anchor.data_ptr<float>(), 
+        positive.data_ptr<float>(), 
+        negative.data_ptr<float>(), 
+        margin, 
+        loss.data_ptr<float>(), 
+        batch_size, 
+        feature_dim
+    );
+    
+    return loss.mean();
+}
+"""
+
+triplet_margin_loss_cpp_source = "torch::Tensor triplet_margin_loss_cuda(torch::Tensor anchor, torch::Tensor positive, torch::Tensor negative, float margin);"
+
+triplet_loss = load_inline(
+    name="triplet_loss", 
+    cpp_sources=triplet_margin_loss_cpp_source, 
+    cuda_sources=triplet_margin_loss_source, 
+    functions=["triplet_margin_loss_cuda"], 
+    verbose=True
+)
+
+class ModelNew(nn.Module):
+    """
+    A model that computes Triplet Margin Loss for metric learning tasks.
+
+    Parameters:
+        margin (float): The margin between the positive and negative samples.
+    """
+    def __init__(self, margin=1.0):
+        super(ModelNew, self).__init__()
+        self.margin = margin
+        self.triplet_loss = triplet_loss
+
+    def forward(self, anchor, positive, negative):
+        return self.triplet_loss.triplet_margin_loss_cuda(anchor, positive, negative, self.margin)
